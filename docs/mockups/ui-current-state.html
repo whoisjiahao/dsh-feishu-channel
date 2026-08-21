@@ -1,0 +1,933 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>dsh-feishu-channel · UI 现状总览</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg:       oklch(98% 0.005 250);
+  --chat-bg:  oklch(96.5% 0.006 250);
+  --surface:  oklch(100% 0 0);
+  --fg:       oklch(22% 0.02 240);
+  --muted:    oklch(47% 0.018 240);
+  --border:   oklch(90% 0.008 240);
+  --tone-neutral:   oklch(47% 0.018 240);
+  --tone-neutral-weak: oklch(95% 0.006 240);
+  --tone-info:      oklch(58% 0.13 255);
+  --tone-info-weak: oklch(94% 0.04 255);
+  --tone-success:     oklch(46% 0.15 145);
+  --tone-success-strong: oklch(40% 0.14 145);
+  --tone-success-weak:   oklch(94% 0.05 145);
+  --tone-warning:     oklch(45% 0.13 70);
+  --tone-warning-weak:   oklch(94% 0.05 70);
+  --tone-failure:     oklch(48% 0.19 25);
+  --tone-failure-weak:   oklch(95% 0.04 25);
+
+  --surface-2:   oklch(97.5% 0.005 250);
+  --surface-3:   oklch(95% 0.006 240);
+  --inline-code: oklch(96% 0.006 240);
+  --cm:          oklch(58% 0.02 240);
+  --tl-dot:      oklch(78% 0.008 250);
+  --sk-1: oklch(94% 0.005 250);
+  --sk-2: oklch(91% 0.006 250);
+  --sk-3: oklch(94% 0.005 250);
+  --foot:        oklch(68% 0.015 240);
+
+  --font-display: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --font-body:    -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+
+  /* spacing scale (docs/design-system.md §3.5) */
+  --space-2: 4px;
+  --space-3: 8px;
+  --space-4: 12px;
+  --space-5: 14px;
+  --space-6: 16px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
+body {
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.6;
+  letter-spacing: 0.01em;
+  color: var(--fg);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+.tabular { font-variant-numeric: tabular-nums; }
+.mono {
+  font-family: var(--font-mono);
+  font-size: 0.93em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- board top ---------- */
+.board-top {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.board-top-inner {
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-mark {
+  width: 36px; height: 36px; border-radius: 9px;
+  background: var(--tone-success);
+  display: grid; place-items: center;
+  color: var(--surface); flex: none;
+}
+.brand-name { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+.brand-sub { font-size: 12px; color: var(--muted); letter-spacing: 0.01em; margin-top: 1px; }
+.meta-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip {
+  font-size: 12px; color: var(--muted);
+  border: 1px solid var(--border); background: var(--surface-2);
+  padding: 4px 10px; border-radius: 999px; letter-spacing: 0.02em;
+}
+
+/* ---------- layout ---------- */
+.stage { max-width: 1160px; margin: 0 auto; padding: 24px 24px 64px; }
+.lead { max-width: 860px; margin-bottom: 22px; }
+.lead h1 {
+  font-family: var(--font-display);
+  font-size: 26px; font-weight: 600; letter-spacing: -0.015em; line-height: 1.3;
+}
+.lead p { font-size: 13.5px; color: var(--muted); margin-top: 8px; line-height: 1.7; }
+
+/* 现状要点 */
+.rules {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin: 0 0 28px;
+}
+.rule {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 14px;
+}
+.rule .n { font-size: 11px; color: var(--muted); letter-spacing: 0.06em; font-weight: 600; }
+.rule .t { font-size: 13px; font-weight: 500; margin-top: 2px; }
+.rule .d { font-size: 12px; color: var(--muted); margin-top: 3px; line-height: 1.55; }
+
+/* ---------- sections ---------- */
+.group { margin-bottom: 34px; }
+.group-head {
+  display: flex; align-items: baseline; gap: 10px;
+  margin-bottom: 14px;
+}
+.group-kicker {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+  color: var(--tone-info);
+}
+.group-title { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+.group-note { font-size: 12.5px; color: var(--muted); margin-left: auto; letter-spacing: 0.01em; }
+
+.surface-row { display: flex; gap: 22px; flex-wrap: wrap; }
+.surface-col { flex: 1 1 340px; min-width: 300px; }
+.surface-label { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+.surface-tag { font-size: 12px; color: var(--muted); margin-bottom: 10px; line-height: 1.5; }
+
+/* chat backdrop */
+.chat {
+  background: var(--chat-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+
+/* ---------- chat message ---------- */
+.msg { display: flex; gap: 10px; align-items: flex-start; }
+.msg.user { flex-direction: row-reverse; }
+.avatar {
+  width: 30px; height: 30px; border-radius: 8px;
+  display: grid; place-items: center; flex: none; margin-top: 2px;
+  font-size: 12px; font-weight: 600;
+}
+.avatar.bot { background: var(--tone-success-weak); border: 1px solid color-mix(in oklch, var(--tone-success) 25%, transparent); color: var(--tone-success); }
+.avatar.user { background: var(--tone-info-weak); border: 1px solid color-mix(in oklch, var(--tone-info) 18%, transparent); color: var(--tone-info); }
+.bubble.user {
+  background: var(--tone-info-weak);
+  border: 1px solid color-mix(in oklch, var(--tone-info) 18%, transparent);
+  border-radius: 10px 4px 10px 10px;
+  padding: 9px 13px; font-size: 14px; line-height: 1.6;
+  max-width: 78%;
+}
+.bot-content { display: flex; flex-direction: column; gap: 6px; min-width: 0; width: 100%; max-width: 560px; }
+
+/* native reply quote — rendered by the Feishu client INSIDE the same bubble
+   as the card; the card's white head bar continues it, no separate container */
+.card-quote {
+  position: relative;
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 10px 16px 8px 19px;
+  background: var(--surface);
+}
+.card-quote::before {
+  content: ""; position: absolute; left: 12px; top: 11px; bottom: 9px;
+  width: 3px; border-radius: 2px; background: var(--tone-info);
+}
+.card-quote .q-name { font-size: 12px; font-weight: 500; color: var(--fg); flex: none; letter-spacing: 0.02em; white-space: nowrap; }
+.card-quote .q-text { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+
+/* plain message bubble */
+.bubble.bot {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px 10px 10px 10px;
+  padding: 10px 13px;
+  font-size: 14px; line-height: 1.65;
+  max-width: 560px; min-width: 0;
+}
+.bubble.bot .fail { color: var(--tone-failure); }
+
+/* ---------- the card ---------- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 1px 2px oklch(0% 0 0 / .04), 0 4px 14px oklch(0% 0 0 / .05);
+  width: 100%; max-width: 560px; overflow: hidden;
+}
+
+.card-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 5px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.card-head .ts { font-size: 11.5px; color: var(--muted); letter-spacing: 0.02em; font-variant-numeric: tabular-nums; }
+.card-head .head-meta {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: 11px; color: var(--muted);
+  letter-spacing: 0.02em; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.card-head .chev { color: var(--muted); flex: none; margin-left: auto; }
+.card-head .ts::after { content: " · "; }
+.card-head .head-meta::after { content: " · "; }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11.5px; font-weight: 500;
+  padding: 2px 9px; border-radius: 999px;
+  letter-spacing: 0.03em; line-height: 1.5; white-space: nowrap;
+}
+.pill.neutral { background: var(--tone-neutral-weak); color: var(--tone-neutral); border: 1px solid var(--border); }
+.pill.success { background: var(--tone-success-weak); color: var(--tone-success-strong); border: 1px solid color-mix(in oklch, var(--tone-success) 22%, transparent); }
+.pill.danger  { background: var(--tone-failure-weak); color: var(--tone-failure); border: 1px solid color-mix(in oklch, var(--tone-failure) 22%, transparent); }
+.pill.info    { background: var(--tone-info-weak); color: var(--tone-info); border: 1px solid color-mix(in oklch, var(--tone-info) 20%, transparent); }
+.pill.warning { background: var(--tone-warning-weak); color: var(--tone-warning); border: 1px solid color-mix(in oklch, var(--tone-warning) 22%, transparent); }
+
+.card-body { padding: 10px var(--space-6) 14px; }
+.divider { height: 1px; background: var(--border); margin: 10px 0; }
+.divider.thin { margin: 12px 0; background: linear-gradient(to right, transparent 0%, var(--border) 12%, var(--border) 88%, transparent 100%); border: 0; }
+
+/* legacy 卡片 通用 */
+.legacy-row { display: flex; gap: 12px; margin-bottom: 6px; }
+.legacy-row:last-child { margin-bottom: 0; }
+.legacy-row .k { flex: none; font-weight: 600; min-width: 56px; }
+.legacy-row .v { color: var(--fg); min-width: 0; overflow-wrap: anywhere; }
+.legacy-note {
+  font-size: 12px; color: var(--muted);
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 7px; padding: 6px 10px; margin-top: 10px;
+  letter-spacing: 0.01em;
+}
+.action-row { display: flex; gap: 8px; margin-top: 12px; }
+.btn {
+  appearance: none; font-family: inherit;
+  font-size: 13px; font-weight: 500;
+  padding: 7px 16px; border-radius: 8px;
+  cursor: default; letter-spacing: 0.02em; min-height: 36px;
+}
+.btn.primary { background: var(--tone-info); color: #fff; border: 1px solid var(--tone-info); }
+.btn.danger  { background: var(--tone-failure); color: #fff; border: 1px solid var(--tone-failure); }
+.btn.ghost   { background: var(--surface); color: var(--fg); border: 1px solid var(--border); }
+
+/* select */
+.select {
+  margin-top: 10px;
+  display: flex; align-items: center; gap: 8px;
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 7px 12px; font-size: 13px; color: var(--muted);
+  background: var(--surface);
+}
+.select .arrow { margin-left: auto; color: var(--muted); }
+
+/* title / key-fact table / copy (success panel) */
+.card-title { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.45; margin: 0 0 var(--space-4); }
+.card-title--flush { margin: 0; }
+.key-facts {
+  width: 100%; border-collapse: collapse; margin-bottom: var(--space-4);
+  border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+}
+.key-facts th, .key-facts td { padding: var(--space-3) var(--space-4); text-align: left; vertical-align: top; }
+.key-facts thead th { font-size: 11.5px; color: var(--muted); letter-spacing: 0.02em; font-weight: 600; border-bottom: 1px solid var(--border); background: var(--surface-2); }
+.key-facts td { font-family: var(--font-mono); font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.key-facts td + td { border-left: 1px solid var(--border); }
+.key-facts tr + tr td { border-top: 1px solid var(--border); }
+.key-facts td:first-child { width: 30%; font-family: var(--font-body); font-size: 11.5px; font-weight: 600; color: var(--muted); letter-spacing: 0.02em; }
+.body-copy { font-size: 14px; line-height: 1.65; color: var(--fg); }
+.body-copy + .body-copy { margin-top: 10px; }
+.body-copy .accent-ink { color: var(--tone-success); font-weight: 500; }
+.checklist { list-style: none; margin-top: 10px; }
+.checklist li { font-size: 14px; line-height: 1.6; padding: 5px 0; word-break: break-word; }
+.checklist li + li { border-top: 1px dashed var(--border); }
+.checklist .tick { display: inline-block; vertical-align: middle; margin-right: 8px; color: var(--tone-success); }
+
+/* collapsible */
+.collapse-toggle {
+  width: 100%; border: 0; background: transparent;
+  font-family: inherit; font-size: 13px; font-weight: 500; color: var(--fg);
+  padding: 0; display: flex; align-items: center; gap: 8px;
+  letter-spacing: 0.01em; text-align: left;
+}
+.collapse-toggle .ch-icon { color: var(--muted); flex: none; }
+.collapse-toggle .ch-title { flex: none; }
+.collapse-toggle .ch-trace {
+  flex: 1 1 auto; min-width: 0;
+  font-family: var(--font-mono); font-size: 11px; color: var(--muted);
+  letter-spacing: 0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.collapse-toggle .chev { transition: transform .2s ease; color: var(--muted); margin-left: auto; flex: none; }
+.collapse-body { font-size: 13px; line-height: 1.6; color: var(--muted); padding: 0 0 6px; }
+.timeline { display: flex; flex-direction: column; }
+.tl-step { display: flex; gap: 10px; position: relative; padding-left: 22px; }
+.tl-rail { position: absolute; top: 0; bottom: 0; left: 0; width: 12px; }
+.tl-dot {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--tl-dot); box-shadow: 0 0 0 3px var(--surface);
+}
+.tl-step:last-child .tl-dot { background: var(--tone-success); box-shadow: 0 0 0 3px var(--tone-success-weak); }
+.tl-rail::after {
+  content: ""; position: absolute; top: calc(50% + 3px); bottom: 0; left: 50%;
+  width: 1px; background: var(--border);
+}
+.tl-step:first-child .tl-rail::after { top: 50%; }
+.tl-step:last-child .tl-rail::after { display: none; }
+.tl-line { display: flex; gap: 8px; padding: 4px 0; align-items: flex-start; min-width: 0; }
+.tl-line > span:not(.t) { min-width: 0; overflow-wrap: anywhere; }
+.tl-line .t { font-family: var(--font-mono); font-size: 11px; line-height: 20.8px; color: var(--muted); flex: none; min-width: 40px; letter-spacing: 0.02em; }
+
+/* loading panel */
+.loading-title { display: flex; align-items: center; gap: 9px; margin: 0 0 12px; }
+.spinner { animation: spin 1s linear infinite; color: var(--tone-success); flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.steps { list-style: none; }
+.steps li { display: flex; align-items: center; gap: 9px; font-size: 13px; line-height: 1.5; padding: 5px 0; }
+.steps .st { font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.02em; min-width: 58px; flex: none; white-space: nowrap; }
+.steps .status { width: 16px; flex: none; display: grid; place-items: center; }
+.steps li.done .st { color: var(--tone-success); }
+.steps li.now { color: var(--fg); font-weight: 500; }
+.steps li.next .st, .steps li.next .st-text { color: var(--muted); }
+.skeleton { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+.sk { height: 11px; border-radius: 6px; background: var(--sk-1); }
+.sk.w8 { width: 83%; } .sk.w6 { width: 60%; } .sk.w4 { width: 40%; }
+
+/* failure panel */
+.errorbox {
+  border: 1px solid color-mix(in oklch, var(--tone-failure) 28%, var(--border));
+  border-radius: 8px; background: var(--tone-failure-weak);
+  padding: 11px 13px;
+  font-family: var(--font-mono); font-size: 12.5px; line-height: 1.6;
+  color: var(--fg); font-variant-numeric: tabular-nums;
+}
+.errorbox .err { color: var(--tone-failure); font-weight: 500; }
+.errorbox .muted { color: var(--muted); }
+.actions { display: flex; gap: 8px; margin-top: 12px; }
+
+/* head-meta expanded */
+.head-details {
+  padding: 4px 16px 10px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 3px;
+}
+.head-details .row { display: flex; align-items: baseline; gap: 12px; }
+.head-details .row .k { font-size: 11.5px; color: var(--muted); letter-spacing: 0.02em; }
+.head-details .row .v { margin-left: auto; font-size: 11.5px; color: var(--muted); font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* platform native */
+.native-panel {
+  border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+  box-shadow: 0 1px 2px oklch(0% 0 0 / .04);
+}
+.native-input {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  padding: 10px 14px;
+}
+.native-input .caret { color: var(--muted); font-family: var(--font-mono); font-weight: 600; }
+.native-input .txt { color: var(--fg); font-weight: 500; }
+.native-input .hint { margin-left: auto; font-size: 12px; color: var(--muted); }
+.native-menu { background: var(--surface); padding: 6px; }
+.native-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 7px; font-size: 13px; }
+.native-item.on { background: var(--tone-info-weak); }
+.native-item .slash { font-family: var(--font-mono); color: var(--tone-info); flex: none; min-width: 44px; }
+.native-item .t { font-weight: 500; }
+.native-item .d { color: var(--muted); font-size: 12px; }
+.native-item .ic { margin-left: auto; color: var(--muted); }
+
+.console {
+  background: oklch(20% 0.012 250); color: oklch(85% 0.02 250);
+  border-radius: 10px; padding: 14px 16px;
+  font-family: var(--font-mono); font-size: 12px; line-height: 1.7;
+  white-space: pre-wrap; overflow-x: auto;
+}
+.console .ok { color: oklch(80% 0.15 145); }
+.console .kbd { color: oklch(78% 0.12 255); }
+
+/* annotations */
+.annotation {
+  margin-top: 10px;
+  font-size: 12px; color: var(--muted); line-height: 1.6;
+  border-left: 3px solid var(--border);
+  padding: 2px 0 2px 12px;
+}
+.annotation b { color: var(--fg); font-weight: 600; }
+
+.page-foot {
+  text-align: center;
+  font-family: var(--font-mono); font-size: 11.5px; color: var(--foot);
+  letter-spacing: 0.02em; padding: 8px 0 28px;
+}
+
+@media (max-width: 900px) {
+  .rules { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 560px) {
+  .board-top-inner { padding: 12px 14px; }
+  .stage { padding: 18px 14px 48px; }
+  .rules { grid-template-columns: 1fr; }
+  .group-note { margin-left: 0; width: 100%; }
+  .key-facts { table-layout: auto; }
+}
+</style>
+</head>
+<body>
+
+<header class="board-top">
+  <div class="board-top-inner" data-od-id="board-top">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l6 6-6 6"/><path d="M12 18h6"/></svg>
+      </span>
+      <div>
+        <div class="brand-name">dsh-feishu-channel · UI 现状总览</div>
+        <div class="brand-sub">当前实现快照 · docs/mockups/ · 未改动任何源码</div>
+      </div>
+    </div>
+    <div class="meta-chips" data-od-id="meta-chips">
+      <span class="chip">渲染面 8+</span>
+      <span class="chip">schema 2.0 富卡片 · JSON 1.0 交互卡</span>
+      <span class="chip">随飞书深浅色自适应</span>
+    </div>
+  </div>
+</header>
+
+<main class="stage">
+  <section class="lead" data-od-id="lead">
+    <h1>当前项目的全部 UI 表面</h1>
+    <p>本板忠实呈现 dsh-feishu-channel v0.1.0 现状的每一处用户可见界面——以飞书卡片为载体的流式回复、审批、命令、模型设置,以及原生思考过程、普通消息、斜杠面板与扫码注册。卡片按源码中的 CardKit JSON 结构近似还原;内容为示意样例。深浅色由飞书客户端自动适配,本板按浅色预览。</p>
+  </section>
+
+  <section class="rules" data-od-id="current-rules">
+    <div class="rule" data-od-id="rule-live">
+      <div class="n">01 · 生命周期</div>
+      <div class="t">一张卡原地更新</div>
+      <div class="d">首个回合事件建卡 → 增量 patch → turn/end 终态;一条消息最终只有一次可见回合输出。</div>
+    </div>
+    <div class="rule" data-od-id="rule-state">
+      <div class="n">02 · 状态语义</div>
+      <div class="t">三态 + 语义色胶囊</div>
+      <div class="d">处理中(灰)/ 已完成(绿)/ 失败(红);审批用橙/绿/红/灰。</div>
+    </div>
+    <div class="rule" data-od-id="rule-fact">
+      <div class="n">03 · 信息唯一</div>
+      <div class="t">一条信息只出现一次</div>
+      <div class="d">耗时固定在状态行,详情不重复;结论优先正文,证据默认收起在「分析过程」。</div>
+    </div>
+    <div class="rule" data-od-id="rule-fallback">
+      <div class="n">04 · 降级与安全</div>
+      <div class="t">超限降级原生消息</div>
+      <div class="d">卡片超 200 元素 / 5 表 / 28KB 自动降级;审批按钮校验操作人,审批内容以 plain_text 承载(不信任文本)。</div>
+    </div>
+  </section>
+
+  <!-- ================= A. 回复渲染 ================= -->
+  <section class="group" data-od-id="group-reply">
+    <div class="group-head">
+      <span class="group-kicker">A</span>
+      <span class="group-title">回复渲染 · output 模式</span>
+      <span class="group-note">card(默认) 流式富卡片</span>
+    </div>
+
+    <div class="surface-row">
+      <!-- A1 card 三态 -->
+      <div class="surface-col" data-od-id="surface-card">
+        <div class="surface-label">A1 · 三态富卡片 <span class="pill info" style="vertical-align:1px">output: card · 默认</span></div>
+        <div class="surface-tag">宽幅卡片 schema 2.0,body 按状态渲染对应面板;引用回复为飞书客户端原生渲染,不在卡片 JSON 内。</div>
+
+        <div class="chat">
+          <div class="msg user" data-od-id="card-user-msg">
+            <div class="bubble user">看下线上日志,为什么 <span class="mono">/api/orders</span> 这两天开始出现 5xx?顺手给我一个修复建议。</div>
+          </div>
+
+          <!-- 加载态 -->
+          <div class="msg bot" data-od-id="card-loading">
+            <div class="avatar bot" aria-hidden="true">D</div>
+            <div class="bot-content">
+              <div class="card" data-od-id="card-loading">
+                <div class="card-quote" data-od-id="card-quote">
+                  <span class="q-name">回复 Jiahao:</span>
+                  <span class="q-text">看下线上日志,为什么 /api/orders 这两天开始出现 5xx?顺手给我一个修复建议。</span>
+                </div>
+                <div class="card-head">
+                  <span class="ts">14:41</span>
+                  <span class="head-meta"><span class="tabular">24s</span></span>
+                  <span class="pill neutral">处理中</span>
+                  <svg class="chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </div>
+                <div class="card-body">
+                  <div class="loading-title">
+                    <svg class="spinner" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 1-9 9"/></svg>
+                    <h3 class="card-title card-title--flush" style="font-size:15px">正在分析</h3>
+                  </div>
+                  <ul class="steps">
+                    <li class="done"><span class="st">14:41:03</span><span class="status"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg></span>拉取 14:02 – 14:37 调用日志</li>
+                    <li class="now"><span class="st">14:41:05</span><span class="status"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 1-9 9"/></svg></span>聚合 5xx 分布与错误码</li>
+                    <li class="next"><span class="st">下一步</span><span class="status"></span><span class="st-text">生成回复</span></li>
+                  </ul>
+                  <div class="skeleton" aria-hidden="true">
+                    <div class="sk w8"></div><div class="sk w6"></div><div class="sk w4"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="annotation" data-od-id="ann-loading"><b>加载态</b>:引用栏与卡片同属一个气泡(引用栏由客户端渲染);spinner + 「正在分析」固定标题,不重复引用栏已展示的用户消息;实时步骤 HH:MM:SS + ✓/⠋ + 一句话标题;灰色静态骨架近似动画。</div>
+            </div>
+          </div>
+
+          <!-- 成功态 -->
+          <div class="msg bot" data-od-id="card-success">
+            <div class="avatar bot" aria-hidden="true">D</div>
+            <div class="bot-content">
+              <div class="card" data-od-id="card-success">
+                <div class="card-quote">
+                  <span class="q-name">回复 Jiahao:</span>
+                  <span class="q-text">看下线上日志,为什么 /api/orders 这两天开始出现 5xx?顺手给我一个修复建议。</span>
+                </div>
+                <div class="card-head">
+                  <span class="ts">14:41</span>
+                  <span class="head-meta"><span class="tabular">24s</span></span>
+                  <span class="pill success">已完成</span>
+                  <svg class="chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </div>
+                <div class="card-body">
+                  <h2 class="card-title">定位到 5xx 根因:连接池耗尽</h2>
+                  <table class="key-facts" data-od-id="metric-grid">
+                    <thead><tr><th>关键事实</th><th>值</th></tr></thead>
+                    <tbody>
+                      <tr><td>错误码</td><td>ETIMEDOUT</td></tr>
+                      <tr><td>5xx 占比 · 近 30 分钟</td><td>23.4%</td></tr>
+                      <tr><td>问题实例</td><td>orders-api-7c1b</td></tr>
+                      <tr><td>时间窗口</td><td>14:02 – 14:37</td></tr>
+                    </tbody>
+                  </table>
+                  <p class="body-copy">高峰期 <span class="mono">/api/orders</span> 对下游的请求中约 <span class="accent-ink tabular">1/4</span> 超时,根因是连接池上限不足:默认 20 个连接在流量尖峰时被占满,新请求在 <span class="mono">acquire</span> 阶段直接超时失败。</p>
+                  <ul class="checklist">
+                    <li><span class="tick"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg></span>将 <span class="mono">pool.max</span> 从 <span class="mono">20</span> 提升至 <span class="mono">100</span>,并开启连接预热</li>
+                    <li><span class="tick"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg></span>在网关侧对 5xx 增加熔断,避免失败雪崩放大</li>
+                  </ul>
+                  <hr class="divider thin">
+                  <details class="collapse" open data-od-id="analysis-collapse">
+                    <summary class="collapse-toggle">
+                      <svg class="ch-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+                      <span class="ch-title">分析过程</span>
+                      <svg class="chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+                    </summary>
+                    <div class="collapse-body">
+                      <div class="timeline">
+                        <div class="tl-step"><span class="tl-rail"><span class="tl-dot"></span></span><div class="tl-line"><span class="t">14:37:11</span><span>拉取 14:02 – 14:37 全量调用日志,5xx 共 1,284 条</span></div></div>
+                        <div class="tl-step"><span class="tl-rail"><span class="tl-dot"></span></span><div class="tl-line"><span class="t">14:38:05</span><span>按实例聚合错误码,ETIMEDOUT 占 94.2%,集中命中 orders-api-7c1b</span></div></div>
+                        <div class="tl-step"><span class="tl-rail"><span class="tl-dot"></span></span><div class="tl-line"><span class="t">14:39:44</span><span>采样堆栈确认失败发生在 acquire 阶段,连接池 20/20 全忙</span></div></div>
+                        <div class="tl-step"><span class="tl-rail"><span class="tl-dot"></span></span><div class="tl-line"><span class="t">14:40:02</span><span>交叉验证实例 CPU/内存无异常,排除资源瓶颈,锁定连接池上限</span></div></div>
+                      </div>
+                    </div>
+                  </details>
+                </div>
+              </div>
+              <div class="annotation" data-od-id="ann-success"><b>成功态</b>:显式结论标题被提升为首屏;「关键事实 | 值」两列表格保留为 markdown 表格原样渲染(左列字段名、右列内容,对齐且不截断);正文后为折叠的「🔍 分析过程」时间线,工具轨迹不重复进正文;超出 maxTimelineItems 的早期步骤折叠为灰色"已折叠 N 条早期步骤"一行。</div>
+            </div>
+          </div>
+
+          <!-- 失败态 -->
+          <div class="msg bot" data-od-id="card-failure">
+            <div class="avatar bot" aria-hidden="true">D</div>
+            <div class="bot-content">
+              <div class="card" data-od-id="card-failure">
+                <div class="card-quote">
+                  <span class="q-name">回复 Jiahao:</span>
+                  <span class="q-text">看下线上日志,为什么 /api/orders 这两天开始出现 5xx?顺手给我一个修复建议。</span>
+                </div>
+                <div class="card-head">
+                  <span class="ts">14:41</span>
+                  <span class="head-meta"><span class="tabular">24s</span></span>
+                  <span class="pill danger">失败</span>
+                  <svg class="chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </div>
+                <div class="card-body">
+                  <h2 class="card-title">分析失败：日志服务读取超时</h2>
+                  <div class="errorbox" data-od-id="error-box">
+                    <div class="err">READ_TIMEOUT</div>
+                    <div>上游日志服务 12.0s 无响应 · 请求中止</div>
+                    <div class="muted">last attempt: 14:41:07</div>
+                  </div>
+                  <div class="actions" data-od-id="failure-actions">
+                    <button class="btn primary"><span class="btn-icon">↻ 重试</span></button>
+                    <button class="btn ghost">复制错误</button>
+                  </div>
+                </div>
+              </div>
+              <div class="annotation" data-od-id="ann-failure"><b>失败态</b>:部分答案保留在上方;红色错误框(错误码 + 消息 ≤240 字符 + 灰色 last attempt);「重试」复用该卡 messageId 并重放最近一条用户消息,「复制错误」以 toast 回显错误文本。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- A2 头部展开 -->
+      <div class="surface-col" data-od-id="surface-head">
+        <div class="surface-label">A2 · 卡片头部(head-meta)</div>
+        <div class="surface-tag">全宽原生 collapsible_panel,状态行固定单行;点右箭头展开运行时指标。</div>
+        <div class="chat">
+          <div class="msg bot">
+            <div class="avatar bot" aria-hidden="true">D</div>
+            <div class="bot-content">
+              <div class="card" data-od-id="card-head-expanded">
+                <div class="card-quote">
+                  <span class="q-name">回复 Jiahao:</span>
+                  <span class="q-text">看下线上日志,为什么 /api/orders 这两天开始出现 5xx?顺手给我一个修复建议。</span>
+                </div>
+                <div class="card-head" style="border-bottom:0">
+                  <span class="ts">14:41</span>
+                  <span class="head-meta"><span class="tabular">24s</span></span>
+                  <span class="pill success">已完成</span>
+                  <svg class="chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(180deg)"><path d="m6 9 6 6 6-6"/></svg>
+                </div>
+                <div class="head-details" data-od-id="head-details">
+                  <div class="row"><span class="k">模型</span><span class="v">MiniMax-M3</span></div>
+                  <div class="row"><span class="k">输入 Token</span><span class="v">↑35.9k</span></div>
+                  <div class="row"><span class="k">输出 Token</span><span class="v">↓362</span></div>
+                  <div class="row"><span class="k">ctx</span><span class="v">35.9k/1M · 4%</span></div>
+                </div>
+                <div class="card-body">
+                  <p class="body-copy">头部文案固定为「时间 · 耗时 · 状态胶囊」,展开后按字段逐行展示;时长只出现在状态行,终态字段由 footerFields 配置(默认 模型/输入/输出/ctx)。</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="annotation"><b>手机端</b>:状态行只截断、不换行;展开内容占满整卡宽,标签左对齐、数值右对齐,每行 lines: 1。</div>
+      </div>
+
+      <!-- A4 message -->
+      <div class="surface-col" data-od-id="surface-message">
+        <div class="surface-label">A4 · 普通消息 <span class="pill neutral" style="vertical-align:1px">降级 / 答案通道</span></div>
+        <div class="surface-tag">不需要卡片权限;每个完成步骤发一条 markdown 消息,工具活动不上聊天;失败为一行警告。</div>
+        <div class="chat">
+          <div class="msg bot">
+            <div class="avatar bot" aria-hidden="true">D</div>
+            <div class="bot-content">
+              <div class="bubble bot" data-od-id="msg-answer">
+                <b>定位到 5xx 根因:连接池耗尽</b>
+                <br>高峰期 /api/orders 约 1/4 请求超时,根因是连接池上限不足。
+              </div>
+              <div class="bubble bot" data-od-id="msg-failure">
+                <span class="fail">⚠️ 本轮任务失败</span> 日志服务读取超时
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="annotation"><b>降级路径</b>:建卡失败(无卡片权限)或内容超限时,同一回合内容改以 markdown 消息发出——答案永远可达。</div>
+      </div>
+
+      <!-- A5 handoff -->
+      <div class="surface-col" data-od-id="surface-handoff">
+        <div class="surface-label">A5 · 交接/降级卡(handoff)</div>
+        <div class="surface-tag">卡片超 200 元素 / 5 表 / 28KB 时:非终态发交接卡,终态直接原生消息。</div>
+        <div class="chat">
+          <div class="msg bot">
+            <div class="avatar bot" aria-hidden="true">D</div>
+            <div class="bot-content">
+              <div class="card" data-od-id="card-handoff">
+                <div class="card-head" style="justify-content:flex-start;gap:12px;padding:9px 16px">
+                  <span style="font-weight:600;font-size:13px">内容交付</span>
+                  <span class="pill warning">生成中</span>
+                </div>
+                <div class="card-body">
+                  <p class="body-copy">内容较长，完成后将由原生消息发送。</p>
+                </div>
+              </div>
+              <div class="card" data-od-id="card-handoff-terminal">
+                <div class="card-head" style="justify-content:flex-start;gap:12px;padding:9px 16px">
+                  <span style="font-weight:600;font-size:13px">内容交付</span>
+                  <span class="pill success">已完成</span>
+                </div>
+                <div class="card-body">
+                  <p class="body-copy">完整内容已切换为原生消息发送。</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="annotation"><b>title 仅用于交接卡</b>:主卡片顶栏只显示状态胶囊与信息行,不显示 title。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= B. 交互卡片 ================= -->
+  <section class="group" data-od-id="group-interactive">
+    <div class="group-head">
+      <span class="group-kicker">B</span>
+      <span class="group-title">交互卡片 · JSON 1.0</span>
+      <span class="group-note">审批、命令、模型设置 —— 由点击/下拉回调查询,而非流式更新</span>
+    </div>
+
+    <div class="surface-row">
+      <!-- B1 审批 -->
+      <div class="surface-col" data-od-id="surface-approval">
+        <div class="surface-label">B1 · 审批卡片</div>
+        <div class="surface-tag">工具权限问题变成交互卡片;按钮点击者必须与卡片所在聊天匹配,approvers 可进一步限定。</div>
+        <div class="chat">
+          <div class="msg bot">
+            <div class="avatar bot" aria-hidden="true">D</div>
+            <div class="bot-content">
+              <div class="card" data-od-id="card-approval">
+                <div class="card-head" style="justify-content:flex-start;gap:12px;padding:9px 16px">
+                  <span style="font-weight:600;font-size:13px">操作审批</span>
+                  <span class="pill warning">待确认</span>
+                </div>
+                <div class="card-body">
+                  <div class="legacy-row"><span class="k">工具</span><span class="v mono">bash.execute</span></div>
+                  <div class="legacy-row" style="margin-top:6px"><span class="k" style="min-width:0;padding-right:8px">将执行</span></div>
+                  <div class="mono" style="font-size:12.5px;color:var(--muted);background:var(--inline-code);border-radius:6px;padding:8px 10px;margin-top:4px">kubectl -n prod get pods -l app=orders-api<br>kubectl -n prod logs deploy/orders-api --tail=200</div>
+                  <div class="legacy-row" style="margin-top:10px"><span class="k" style="min-width:0;padding-right:8px">模型说明</span></div>
+                  <div style="font-size:13px;color:var(--fg);margin-top:4px">检查线上实例状态与最近日志,定位 5xx 根因。</div>
+                  <div class="legacy-note">批准前请确认上面的内容确实是你要执行的。</div>
+                  <div class="action-row" data-od-id="approval-actions">
+                    <button class="btn primary">允许一次</button>
+                    <button class="btn danger">拒绝</button>
+                  </div>
+                </div>
+              </div>
+              <div class="card" data-od-id="card-approval-settled">
+                <div class="card-head" style="justify-content:flex-start;gap:12px;padding:9px 16px">
+                  <span style="font-weight:600;font-size:13px">操作审批</span>
+                  <span class="pill success">已允许</span>
+                </div>
+                <div class="card-body">
+                  <div class="legacy-row"><span class="k">工具</span><span class="v mono">bash.execute</span></div>
+                  <div class="legacy-note">操作人：Jiahao</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="annotation"><b>结算态</b>:允许一次(绿)/ 已拒绝(红)/ 已撤回(灰)/ 不可用(灰);撤销与卸载时挂起审批结算为 cancelled。工具名/命令/模型说明均以 plain_text 承载(不信任文本)。</div>
+      </div>
+
+      <!-- B2 命令 -->
+      <div class="surface-col" data-od-id="surface-commands">
+        <div class="surface-label">B2 · 命令卡片</div>
+        <div class="surface-tag">/new /reset /stop /model /effort /help 与宿主命令;未知命令报错并给列表。结果不退回裸聊天消息。</div>
+        <div class="chat">
+          <div class="msg bot">
+            <div class="avatar bot" aria-hidden="true">D</div>
+            <div class="bot-content">
+              <div class="card" data-od-id="card-command-help">
+                <div class="card-head" style="justify-content:flex-start;gap:12px;padding:9px 16px">
+                  <span style="font-weight:600;font-size:13px">命令中心</span>
+                  <span class="pill info">可用</span>
+                </div>
+                <div class="card-body">
+                  <div class="mono" style="font-size:12.5px;line-height:2">/new · 新建会话<br>/reset · 重置会话<br>/stop · 停止当前任务<br>/model · 查看或更换当前会话模型<br>/effort · 调整当前会话推理强度<br>/help · 显示可用命令</div>
+                  <div class="legacy-note">在输入框键入 / 可随时打开飞书命令面板。</div>
+                </div>
+              </div>
+              <div class="card" data-od-id="card-command-result">
+                <div class="card-head" style="justify-content:flex-start;gap:12px;padding:9px 16px">
+                  <span style="font-weight:600;font-size:13px">命令执行</span>
+                  <span class="pill success">已完成</span>
+                </div>
+                <div class="card-body">
+                  <div class="legacy-row"><span class="k">命令</span><span class="v mono">/reset</span></div>
+                  <p class="body-copy" style="margin-top:6px;font-size:13.5px">已新建空白会话，下一条消息将不带入之前的上下文。</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="annotation"><b>状态胶囊</b>:已完成(绿)/ 失败(红)/ 提示(蓝);结果正文经 markdown 规范化(去工具调用围栏、还原有序列表),≤6000 字符。</div>
+      </div>
+
+      <!-- B3 模型设置 -->
+      <div class="surface-col" data-od-id="surface-model">
+        <div class="surface-label">B3 · 模型设置卡片</div>
+        <div class="surface-tag">原生下拉选择模型 / 推理强度,选择后作用于当前会话下一条消息。</div>
+        <div class="chat">
+          <div class="msg bot">
+            <div class="avatar bot" aria-hidden="true">D</div>
+            <div class="bot-content">
+              <div class="card" data-od-id="card-model-select">
+                <div class="card-head" style="justify-content:flex-start;gap:12px;padding:9px 16px">
+                  <span style="font-weight:600;font-size:13px">模型设置</span>
+                  <span class="pill info">请选择</span>
+                </div>
+                <div class="card-body">
+                  <div class="legacy-row"><span class="k">当前模型</span><span class="v">MiniMax-M3</span></div>
+                  <div class="legacy-row"><span class="k">提供方</span><span class="v">minimax</span></div>
+                  <div class="select" data-od-id="model-dropdown">
+                    <span>选择模型</span>
+                    <svg class="arrow" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                  </div>
+                  <div class="legacy-note">选择后将作用于当前会话的下一条消息。</div>
+                </div>
+              </div>
+              <div class="card" data-od-id="card-model-settled">
+                <div class="card-head" style="justify-content:flex-start;gap:12px;padding:9px 16px">
+                  <span style="font-weight:600;font-size:13px">模型设置</span>
+                  <span class="pill success">已完成</span>
+                </div>
+                <div class="card-body">
+                  <div class="legacy-row"><span class="k">当前模型</span><span class="v">deepseek-chat</span></div>
+                  <div class="legacy-row"><span class="k">提供方</span><span class="v">deepseek</span></div>
+                  <div class="legacy-row"><span class="k">推理强度</span><span class="v">medium</span></div>
+                </div>
+              </div>
+              <div class="card" data-od-id="card-model-failed">
+                <div class="card-head" style="justify-content:flex-start;gap:12px;padding:9px 16px">
+                  <span style="font-weight:600;font-size:13px">推理强度</span>
+                  <span class="pill danger">失败</span>
+                </div>
+                <div class="card-body">
+                  <div style="font-size:13px;color:var(--fg)">该模型不支持指定的推理强度选项。</div>
+                  <div class="legacy-note">请重新输入 /effort再试。</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="annotation"><b>服务端授权</b>:下拉选项由宿主模型目录生成(服务端校验),回调只带紧凑 id;用后即换为明确的结算卡。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= C. 平台原生面 ================= -->
+  <section class="group" data-od-id="group-native">
+    <div class="group-head">
+      <span class="group-kicker">C</span>
+      <span class="group-title">平台原生面</span>
+      <span class="group-note">由飞书客户端 / 运维控制台承载,非插件渲染的卡片</span>
+    </div>
+
+    <div class="surface-row">
+      <!-- C1 斜杠面板 -->
+      <div class="surface-col" data-od-id="surface-slash">
+        <div class="surface-label">C1 · 斜杠命令面板</div>
+        <div class="surface-tag">启动时同步应用级斜杠面板:补齐缺失、移除不再提供的命令(removeUnknown)。</div>
+        <div class="chat">
+          <div class="native-panel" data-od-id="slash-panel">
+            <div class="native-input">
+              <span class="caret">/</span>
+              <span class="txt"></span>
+              <span class="hint">在输入框键入 / 唤起</span>
+            </div>
+            <div class="native-menu">
+              <div class="native-item on" data-od-id="slash-new"><span class="slash">/new</span><span class="t">新建会话</span><span class="ic">↵</span></div>
+              <div class="native-item" data-od-id="slash-reset"><span class="slash">/reset</span><span class="t">重置会话</span></div>
+              <div class="native-item" data-od-id="slash-stop"><span class="slash">/stop</span><span class="t">停止当前任务</span></div>
+              <div class="native-item" data-od-id="slash-model"><span class="slash">/model</span><span class="t">查看或更换当前会话模型</span></div>
+              <div class="native-item" data-od-id="slash-effort"><span class="slash">/effort</span><span class="t">调整当前会话推理强度</span></div>
+              <div class="native-item" data-od-id="slash-help"><span class="slash">/help</span><span class="t">显示可用命令</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="annotation"><b>同步范围</b>:插件自有命令 + 宿主命令运行时;面板增删与列表以 syncSlashCommands 控制。</div>
+      </div>
+
+      <!-- C2 扫码注册 -->
+      <div class="surface-col" data-od-id="surface-onboarding">
+        <div class="surface-label">C2 · 扫码注册(控制台)</div>
+        <div class="surface-tag">首次启动无凭据时,在宿主控制台打印二维码;扫码自动创建应用(含事件订阅),凭据持久化。</div>
+        <div class="console" data-od-id="console-qr">
+feishu-channel: 未配置应用凭据，开始扫码注册流程…
+feishu-channel: 请用飞书扫码创建应用（5 分钟内有效）:
+
+          █▀▀▀▀▀█ ▀█▀▄█▄ █▀▀▀▀▀█
+          █ ███ █  ▄ ▄▄█▀ █ ███ █
+          █ ▀▀▀ █ ▄▀█▄▀▄▀ █ ▀▀▀ █
+          ▀▀▀▀▀▀▀ ▀ ▀▀▀ ▀ ▀▀▀▀▀▀▀
+          █▀█▄▀█▀ ▀█▄█ █▀▄ ▀▀▄█▀█▄
+          █▀▀▄▀▀█ █▀▄▄ ▀▄▀▀▄▀ █▄▄▀
+          ▀▀▀▀▀▀▀ ▀▀▀ ▀▀ ▀▀▀ ▀▀▀▀▀
+
+feishu-channel: 扫码页面: https://open.feishu.cn/appdev/...
+feishu-channel: <span class="ok">扫码成功，凭据已保存，正在连接…</span></div>
+        <div class="annotation" style="margin-top:12px"><b>控制台面</b>:扫码注册与凭据均落在运维控制台,不进入聊天 UI;过期码自动重发(间隔 ≥60s)。</div>
+      </div>
+
+      <!-- C3 引用与门控 -->
+      <div class="surface-col" data-od-id="surface-gating">
+        <div class="surface-label">C3 · 引用回复与入站门控</div>
+        <div class="surface-tag">非卡片表面的行为设计,但决定 UI 如何呈现。</div>
+        <div class="chat">
+          <div class="msg bot">
+            <div class="avatar bot" aria-hidden="true">D</div>
+            <div class="bot-content">
+              <div class="card" data-od-id="card-gating">
+                <div class="card-quote" data-od-id="quote-gating">
+                  <span class="q-name">回复 Jiahao:</span>
+                  <span class="q-text">@DSH Agent 帮我看下这个部署</span>
+                </div>
+                <div class="card-head">
+                  <span class="ts">15:02</span>
+                  <span class="head-meta"><span class="tabular">3s</span></span>
+                  <span class="pill neutral">处理中</span>
+                </div>
+                <div class="card-body">
+                  <p class="body-copy">群聊必须 @ 机器人才响应(requireMention);回复通过 replyTo 指向触发消息,话题群内 replyInThread。白名单空 = 平台可见性为准。</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="annotation"><b>引用边界</b>:引用栏由飞书客户端渲染,插件无法控制其布局;因此主卡以白底顶栏衔接原生引用栏,不在两者之间插入独立灰层。</div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="page-foot" data-od-id="page-foot">dsh-feishu-channel · UI 现状总览 · 内容为示意样例 · 与 docs/DESIGN.md §4 渲染规则一一对应</footer>
+
+</body>
+</html>

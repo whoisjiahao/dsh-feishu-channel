@@ -1,0 +1,35 @@
+# Bundle patch applied over the selected DSH profile when this package is listed
+# in `dsh.profile.bundles`. The row id is deployment-local; the package name
+# must match package.json.
+
+- insert:
+    - id: feishu-channel
+      name: dsh-feishu-channel
+      config:
+        # Credentials: entry values (env via `!!js`, never `!js`) → the user
+        # settings document (loses to entry values while present). With neither
+        # set, first boot logs a QR URL; scanning it creates the app and the
+        # credentials persist through the host `settings` service.
+        # appId: !!js process.env.FEISHU_APP_ID
+        # appSecret: !!js process.env.FEISHU_APP_SECRET
+        # domain: open.feishu.cn          # 国际版用 https://open.larksuite.com
+        # cwd: an absolute workspace directory  # 默认 ~/.dsh-feishu
+        # provider: deepseek              # 默认走宿主 agentDefaultModel
+        # model: deepseek-chat
+        # sessionScope: chat              # chat-thread / chat-sender 分得更细
+        # showProcess: true               # 关闭则只发答案
+        # attachImages: false             # 仅视觉路由开启
+        # syncSlashCommands: true         # 同步命令到飞书斜杠面板
+        # denyTools: [ask_user_question, exit_plan_mode]  # 答案无法到达聊天的工具
+        requireMention: true
+        # 授权只收窄、不设门禁：谁能私聊机器人由应用可见范围决定。默认服务任何
+        # 被拉入的群（需 @）与任何应用可见的人。
+        # senderAllowlist: []             # 私聊白名单（ou_…）
+        # groupAllowlist: []              # 群白名单（oc_…）
+        # approvers: []                   # 审批点击者白名单
+
+    # invariant companion 不进默认 patch：dsh-base/web profile 不组合
+    # `invariants` 服务（它来自宿主 runtime-diagnostics 组合），等待缺失服务的
+    # 行会让整棵树启动失败。诊断组合里这样加：
+    #   - id: feishu-channel-invariant
+    #     name: 'dsh-feishu-channel/invariant'

@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.tgz
+.DS_Store
+# tsc -b 增量缓存与 JS 副产物：运行与发布都只用 tsdown bundle（lib/index.js、lib/invariant.js）与 .d.ts
+lib/tsconfig.tsbuildinfo
+lib/types/*.js
+lib/types/*.js.map

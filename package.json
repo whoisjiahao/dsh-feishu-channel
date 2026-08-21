@@ -1,0 +1,76 @@
+{
+  "name": "dsh-feishu-channel",
+  "description": "Feishu/Lark IM channel for DeepSeek Harness: chats drive agents, answers render as streaming rich cards, approvals settle by button clicks",
+  "version": "0.2.0",
+  "type": "module",
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc -b --pretty false && tsc -p tsconfig.vitest.json --pretty false",
+    "gates": "node scripts/gates/run.mjs",
+    "prepare": "node scripts/prepare.mjs"
+  },
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/invariant.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/invariant.js",
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "src",
+    "scripts/build.mjs",
+    "scripts/prepare.mjs",
+    "scripts/register-lark-app.mjs",
+    "cordis.patch.yml",
+    "docs/design-system.md",
+    "docs/DESIGN.md",
+    "docs/mockups/ui-current-state.html",
+    "docs/preview",
+    "README.md"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/whoisjiahao/dsh-feishu-channel.git"
+  },
+  "bugs": {
+    "url": "https://github.com/whoisjiahao/dsh-feishu-channel/issues"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.18.1",
+    "@larksuite/channel": "^0.5.0",
+    "qrcode-terminal": "^0.12.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/cordis-plugin-loader": "^1.0.2",
+    "@types/node": "^22.20.0",
+    "@types/qrcode-terminal": "^0.12.2",
+    "tsdown": "^0.22.2",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}
