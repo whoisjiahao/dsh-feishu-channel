@@ -3,10 +3,10 @@
 <p align="center"><strong>把飞书变成 DSH 的遥控器</strong> —— 双向对话、流式富卡片、一键审批、扫码即用。</p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.2.0-1f6feb?style=flat" alt="version">
+  <img src="https://img.shields.io/badge/version-0.3.0-1f6feb?style=flat" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-3fb950?style=flat" alt="license">
   <img src="https://img.shields.io/badge/DSH-bundle%20plugin-6e40c9?style=flat" alt="DSH bundle plugin">
-  <img src="https://img.shields.io/badge/tests-216%20cases-3fb950?style=flat" alt="216 automated tests">
+  <a href="https://github.com/whoisjiahao/dsh-feishu-channel/actions/workflows/gates.yml"><img src="https://github.com/whoisjiahao/dsh-feishu-channel/actions/workflows/gates.yml/badge.svg" alt="gates"></a>
 </p>
 
 > Feishu/Lark IM channel for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)：在飞书聊天里直接驱动你的 DSH agent——每个私聊、群聊或话题都有自己的 agent，回复以流式富卡片回到飞书，工具权限问题变成按钮决策。
@@ -20,6 +20,7 @@
 | ⚡ **扫码即用** | 零配置：启动时打印二维码，飞书一扫自动创建应用（含事件订阅与凭据持久化），30 秒开聊 |
 | 🎴 **流式富卡片** | 每轮一张三态卡片原地更新：加载中实时步骤 → 结论优先正文 → 失败可重试；超限自动降级为原生消息 |
 | 🔐 **一键审批** | 工具权限问题变成交互卡片，点「允许一次 / 拒绝」即决策，无需切窗口打字 |
+| 🧭 **交互命令** | 裸命令自动变成选择、输入或确认卡；执行结果在原卡片结算，危险权限额外二次确认 |
 | 🌐 **无需公网** | WebSocket 长连接，不需要公网 URL、回调地址或端口转发 |
 | 🧵 **多会话** | 私聊 / 群聊 / 话题各自独立 agent，互不串台；`/new`、`/stop` 随时控制 |
 | 🛡️ **安全默认** | 白名单门控、群内 @ 门控、密钥脱敏、拒绝静默——默认拒绝一切收窄之外的流量 |
@@ -29,7 +30,7 @@
 **① 安装**（装进你的 web profile）：
 
 ```sh
-dsh plugin --profile web add github:whoisjiahao/dsh-feishu-channel#v0.2.0
+dsh plugin --profile web add github:whoisjiahao/dsh-feishu-channel#v0.3.0
 ```
 
 **② 重启 dsh web**，启动日志出现二维码：
@@ -61,7 +62,7 @@ feishu-channel: 请用飞书扫码创建应用…
 
 ![回复卡片](docs/preview/cards-reply.png)
 
-**审批与命令卡片**：点按钮决策，命令结果与模型设置同样以卡片呈现：
+**审批与命令卡片**：点按钮决策；命令可选择、输入或确认，结果在原卡片结算：
 
 ![交互卡片](docs/preview/cards-interactive.png)
 
@@ -99,8 +100,6 @@ feishu-channel: 请用飞书扫码创建应用…
 
 </details>
 
-> `0.2.0` 已删除没有生产行为的 `output`、`title`、`maxReasoningChars`、`maxToolResultChars`；请从旧配置中直接移除这些字段。
-
 ## 命令
 
 | 命令 | 作用 |
@@ -108,9 +107,13 @@ feishu-channel: 请用飞书扫码创建应用…
 | `/new` | 新建空白会话 |
 | `/reset` | 重置当前会话（与 /new 同义） |
 | `/stop` | 停止当前任务 |
+| `/model` | 查看或切换当前会话模型 |
+| `/effort` | 查看或调整当前会话推理强度 |
 | `/help` | 列出可用命令 |
 
-其余 `/xxx` 由宿主命令运行时执行。
+直接发送裸命令会打开交互卡：有固定选项的命令显示下拉框，需要参数的命令显示输入框，无参数动作显示确认按钮。显式参数仍可直接执行，例如 `/feedback 卡片体验很好`。
+
+其余 `/xxx` 来自当前 DSH 的宿主命令运行时，并按宿主描述自动进入同一套交互流程。`/permission` 的选项直接读取当前会话投影；切换到 `danger-full-access` 前必须再次确认。
 
 ## 安全
 
@@ -118,7 +121,7 @@ feishu-channel: 请用飞书扫码创建应用…
 
 - **生产部署务必设置** `senderAllowlist` / `groupAllowlist` / `approvers`，把遥控器交给该交的人
 - 审批卡片展示工具名、将执行的命令与模型说明；所有动态文本先限长，命令和说明中的 token / secret / password / api-key 等先自动脱敏
-- 点击必须同时匹配审批动作、原卡片、所在聊天与允许的操作人；同名 callId 在不同会话之间不会串用参数
+- 点击必须同时匹配动作、原卡片、所在聊天、当前会话与允许的操作人；旧命令卡自动失效，同名 callId 在不同会话之间不会串用参数
 - 拒绝入站保持静默：不向未授权者暴露边界事实
 - 卸载即净：transport 断开、自有 agent 全部 dispose、挂起审批全部结算为 cancelled
 
@@ -130,7 +133,7 @@ pnpm gates        # typecheck + test + build + pack 冒烟 + 版本一致性（�
 pnpm build        # tsc + tsdown，lib/ 提交进 git
 ```
 
-组件组合测试（`tests/plugin.spec.ts`，55 例）：完整插件经 `apply` 挂到可控 transport 与 host 测试替身（`tests/harness.ts`），覆盖入站会话阶梯、授权拒绝、命令卡片、审批卡片全生命周期、富卡片渲染与失败重试、图片附加、斜杠面板同步、卸载清理与扫码注册流程。真实飞书客户端验收仍是发布前的独立步骤。
+组件组合测试将完整插件经 `apply` 挂到可控 transport 与 host 测试替身（`tests/harness.ts`），覆盖入站会话阶梯、授权拒绝、命令卡片、审批卡片全生命周期、富卡片渲染与失败重试、图片附加、斜杠面板同步、卸载清理与扫码注册流程。真实飞书客户端验收仍是发布前的独立步骤。
 
 架构与设计决策见 [docs/DESIGN.md](docs/DESIGN.md)。
 

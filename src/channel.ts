@@ -14,7 +14,15 @@ import type {
 import { AgentRegistry, type OwnedAgent } from './agent-registry.ts'
 import { createApprovalGate, type ApprovalTurn } from './approval-gate.ts'
 import { refuseApprovalClick, refuseMessage, type Authorization } from './authorization.ts'
-import { commandHelpCard, commandResultCard } from './command-card.ts'
+import {
+  cancelledCommandCard,
+  COMMAND_INPUT_NAME,
+  commandFormActionId,
+  commandHelpCard,
+  commandInteractionActionValue,
+  commandPromptCard,
+  commandResultCard,
+} from './command-card.ts'
 import {
   CHANNEL_COMMANDS,
   commandCatalog,
@@ -35,13 +43,15 @@ import type {
   HostAgentPresets,
   HostAttachments,
   HostCommands,
+  HostCommandDescriptor,
   HostContentBlock,
   HostDefaultModel,
   HostLoader,
   HostApiResult,
-  HostModelApiProxy,
+  HostSessionApiProxy,
   HostModelController,
   HostModelSelection,
+  HostPermissionSelect,
   HostSessionEvent,
   HostSessionPersistence,
   HostSystemPrompt,
@@ -66,6 +76,16 @@ import {
   settledModelSettingCard,
   type ModelSettingKind,
 } from './model-card.ts'
+import {
+  failedPermissionSettingCard,
+  FULL_ACCESS_PERMISSION,
+  permissionConfirmationCard,
+  permissionSettingActionValue,
+  permissionSettingCard,
+  permissionSettingChoices,
+  settledPermissionSettingCard,
+  type PermissionSettingChoice,
+} from './permission-card.ts'
 import { syncSlashPanel, type SlashPanelPort } from './slash-panel.ts'
 import { TurnCoordinator, type CoordinatedTurn } from './turn-coordinator.ts'
 
@@ -95,16 +115,37 @@ interface PreparedChannel {
 }
 
 interface PendingModelSetting {
-  readonly target: {
-    readonly conversationKey: ConversationKey
-    readonly chatId: string
-    readonly chatType: string
-    readonly cardMessageId: string
-    readonly sessionId: string
-  }
+  readonly target: InteractionTarget
   readonly kind: ModelSettingKind
   readonly choices: ReadonlyMap<string, HostModelSelection>
   readonly controller: HostModelController
+}
+
+interface InteractionTarget {
+  readonly conversationKey: ConversationKey
+  readonly chatId: string
+  readonly chatType: string
+  readonly cardMessageId: string
+  readonly sessionId: string
+}
+
+type PendingCommandInteraction =
+  | {
+    readonly kind: 'menu'
+    readonly target: InteractionTarget
+    readonly commands: ReadonlyMap<string, HostCommandDescriptor>
+  }
+  | {
+    readonly kind: 'prompt'
+    readonly target: InteractionTarget
+    readonly command: HostCommandDescriptor
+  }
+
+interface PendingPermissionSetting {
+  readonly target: InteractionTarget
+  readonly select: HostPermissionSelect
+  readonly choices: ReadonlyMap<string, PermissionSettingChoice>
+  readonly confirmation?: PermissionSettingChoice | undefined
 }
 
 /** Model-facing layout contract for the frozen reply-card experience. */
@@ -127,7 +168,7 @@ function valueOf<T>(result: HostApiResult<T>): T {
   throw new Error(result.error.code + ': ' + result.error.message)
 }
 
-function createModelController(api: HostModelApiProxy | undefined): HostModelController | undefined {
+function createModelController(api: HostSessionApiProxy | undefined): HostModelController | undefined {
   if (api === undefined) return undefined
   return {
     async inspect(sessionId) {
@@ -142,6 +183,21 @@ function createModelController(api: HostModelApiProxy | undefined): HostModelCon
       return valueOf(response.result).selected
     },
   }
+}
+
+async function inspectPermissions(
+  api: HostSessionApiProxy | undefined,
+  sessionId: string,
+): Promise<HostPermissionSelect> {
+  const history = api?.sessions.history
+  if (history === undefined) throw new Error('当前部署没有会话权限投影服务。')
+  const response = await history({
+    rpcId: randomUUID(),
+    payload: { sessionId, maxMessages: 1 },
+  })
+  const permissions = valueOf(response.result).projections?.values.permissions
+  if (permissions === undefined) throw new Error('当前会话没有可用的权限预设。')
+  return permissions
 }
 
 function activityLabel(value: string): string {
@@ -233,6 +289,9 @@ export function installChannel(
   const retryCards = new Map<string, { readonly turn: CoordinatedTurn; readonly chatType: string }>()
   const reuseCardForTurn = new Map<string, string>()
   const pendingModelSettings = new Map<string, PendingModelSetting>()
+  const pendingCommandInteractions = new Map<string, PendingCommandInteraction>()
+  const pendingPermissionSettings = new Map<string, PendingPermissionSetting>()
+  const commandOperations = new Set<Promise<void>>()
   const commandController = new AbortController()
   const imageController = new AbortController()
   const panelController = new AbortController()
@@ -353,7 +412,7 @@ export function installChannel(
 
   const rememberBinding = (
     owner: OwnedAgent,
-    target: ReturnType<typeof createTurnTarget>,
+    target: { readonly conversationKey: ConversationKey; readonly chatId: string },
     chatType: string,
   ): ConversationBinding => {
     const previous = bindingsByKey.get(owner.conversationKey)
@@ -406,6 +465,21 @@ export function installChannel(
     }
   }
 
+  const forgetCommandInteractions = (key: ConversationKey): void => {
+    for (const [id, pending] of pendingCommandInteractions) {
+      if (pending.target.conversationKey === key) pendingCommandInteractions.delete(id)
+    }
+    for (const [id, pending] of pendingPermissionSettings) {
+      if (pending.target.conversationKey === key) pendingPermissionSettings.delete(id)
+    }
+  }
+
+  const trackCommandOperation = (operation: Promise<void>): void => {
+    commandOperations.add(operation)
+    const retire = (): void => { commandOperations.delete(operation) }
+    operation.then(retire, retire)
+  }
+
   const presentationFor = (turn: CoordinatedTurn, presentCall: ToolPresenter): ReplyPresenter => {
     const existing = presentations.get(turn.id)
     if (existing !== undefined) return existing.presenter
@@ -437,12 +511,15 @@ export function installChannel(
     binding: ConversationBinding,
     kind: ModelSettingKind,
     controller: HostModelController,
+    cardMessageId?: string,
   ): Promise<boolean> => {
     const directory = await controller.inspect(binding.owner.handle.agent.session.id)
     const choices = modelSettingChoices(directory, kind)
     if (choices.length === 0) return false
     const id = randomUUID()
-    const sent = await port.send(binding.chatId, { card: modelSettingCard(directory, kind, id, choices) })
+    const card = modelSettingCard(directory, kind, id, choices)
+    const messageId = cardMessageId ?? (await port.send(binding.chatId, { card })).messageId
+    if (cardMessageId !== undefined) await port.updateCard(cardMessageId, card)
     for (const [pendingId, pending] of pendingModelSettings) {
       if (pending.target.conversationKey === binding.key && pending.kind === kind) {
         pendingModelSettings.delete(pendingId)
@@ -453,7 +530,7 @@ export function installChannel(
         conversationKey: binding.key,
         chatId: binding.chatId,
         chatType: binding.chatType,
-        cardMessageId: sent.messageId,
+        cardMessageId: messageId,
         sessionId: binding.owner.handle.agent.session.id,
       },
       kind,
@@ -463,53 +540,180 @@ export function installChannel(
     return true
   }
 
-  const handleSessionCommand = async (
-    message: NormalizedMessage,
-    command: ParsedCommand,
-    key: ConversationKey,
-    target: ReturnType<typeof createTurnTarget>,
-    state: PreparedChannel,
+  const interactionTarget = (
+    binding: ConversationBinding,
+    cardMessageId: string,
+  ): InteractionTarget => ({
+    conversationKey: binding.key,
+    chatId: binding.chatId,
+    chatType: binding.chatType,
+    cardMessageId,
+    sessionId: binding.owner.handle.agent.session.id,
+  })
+
+  const publishInteractionCard = async (
+    binding: ConversationBinding,
+    card: object,
+    cardMessageId?: string,
+  ): Promise<InteractionTarget> => {
+    const messageId = cardMessageId ?? (await port.send(binding.chatId, { card })).messageId
+    if (cardMessageId !== undefined) await port.updateCard(cardMessageId, card)
+    return interactionTarget(binding, messageId)
+  }
+
+  const sendCommandMenu = async (
+    binding: ConversationBinding,
+    cardMessageId?: string,
   ): Promise<void> => {
-    const replacement = await state.agents.reset(key)
-    coordinator.clear(key)
-    await closePresentations(key)
-    forgetConversationCards(key)
-    await approvals.cancelConversation(key)
-    for (const [id, pending] of pendingModelSettings) {
-      if (pending.target.conversationKey === key) pendingModelSettings.delete(id)
+    const commands = ctx.get('commands') as HostCommands | undefined
+    const catalog = commandCatalog(commands, binding.owner.handle.agent)
+    const id = randomUUID()
+    const target = await publishInteractionCard(binding, commandHelpCard(catalog, id), cardMessageId)
+    for (const [pendingId, pending] of pendingCommandInteractions) {
+      if (pending.target.conversationKey === binding.key) pendingCommandInteractions.delete(pendingId)
     }
-    rememberBinding(replacement, target, message.chatType)
-    await port.send(message.chatId, {
-      card: commandResultCard(command.name, {
-        reply: '已新建空白会话，下一条消息将不带入之前的上下文。',
-        status: 'success',
-      }),
+    pendingCommandInteractions.set(id, {
+      kind: 'menu',
+      target,
+      commands: new Map(catalog.map(command => [command.name, command])),
     })
+  }
+
+  const sendCommandPrompt = async (
+    binding: ConversationBinding,
+    command: HostCommandDescriptor,
+    cardMessageId?: string,
+  ): Promise<void> => {
+    const id = randomUUID()
+    const target = await publishInteractionCard(binding, commandPromptCard(command, id), cardMessageId)
+    for (const [pendingId, pending] of pendingCommandInteractions) {
+      if (pending.target.conversationKey === binding.key) pendingCommandInteractions.delete(pendingId)
+    }
+    pendingCommandInteractions.set(id, { kind: 'prompt', target, command })
+  }
+
+  const sendSessionCommandPrompt = async (
+    target: ReturnType<typeof createTurnTarget>,
+    chatType: string,
+    command: HostCommandDescriptor,
+  ): Promise<void> => {
+    const id = randomUUID()
+    const sent = await port.send(target.chatId, { card: commandPromptCard(command, id) })
+    for (const [pendingId, pending] of pendingCommandInteractions) {
+      if (pending.target.conversationKey === target.conversationKey) {
+        pendingCommandInteractions.delete(pendingId)
+      }
+    }
+    pendingCommandInteractions.set(id, {
+      kind: 'prompt',
+      target: {
+        conversationKey: target.conversationKey,
+        chatId: target.chatId,
+        chatType,
+        cardMessageId: sent.messageId,
+        sessionId: bindingsByKey.get(target.conversationKey)?.owner.handle.agent.session.id ?? '',
+      },
+      command,
+    })
+  }
+
+  const sendPermissionSetting = async (
+    binding: ConversationBinding,
+    cardMessageId?: string,
+  ): Promise<void> => {
+    const select = await inspectPermissions(
+      ctx.get('apiProxy') as HostSessionApiProxy | undefined,
+      binding.owner.handle.agent.session.id,
+    )
+    const choices = permissionSettingChoices(select)
+    if (choices.length === 0) throw new Error('当前会话没有可切换的权限预设。')
+    const id = randomUUID()
+    const target = await publishInteractionCard(
+      binding,
+      permissionSettingCard(select, id, choices),
+      cardMessageId,
+    )
+    for (const [pendingId, pending] of pendingPermissionSettings) {
+      if (pending.target.conversationKey === binding.key) pendingPermissionSettings.delete(pendingId)
+    }
+    pendingPermissionSettings.set(id, {
+      target,
+      select,
+      choices: new Map(choices.map(choice => [choice.value, choice])),
+    })
+  }
+
+  const openCommandInteraction = async (
+    binding: ConversationBinding,
+    command: HostCommandDescriptor,
+    cardMessageId?: string,
+  ): Promise<void> => {
+    if (command.name === HELP_COMMAND) {
+      await sendCommandMenu(binding, cardMessageId)
+      return
+    }
+    if (command.name === MODEL_COMMAND || command.name === EFFORT_COMMAND) {
+      const controller = createModelController(ctx.get('apiProxy') as HostSessionApiProxy | undefined)
+      if (controller === undefined) throw new Error('当前部署没有会话模型控制服务。')
+      const sent = await sendModelSetting(
+        binding,
+        command.name === MODEL_COMMAND ? 'model' : 'effort',
+        controller,
+        cardMessageId,
+      )
+      if (!sent) throw new Error('当前会话没有可选项。')
+      return
+    }
+    if (command.name === 'permission') {
+      await sendPermissionSetting(binding, cardMessageId)
+      return
+    }
+    await sendCommandPrompt(binding, command, cardMessageId)
+  }
+
+  const resetConversation = async (
+    target: InteractionTarget,
+    command: string,
+  ) => {
+    const state = prepared
+    if (state === undefined) throw new Error('命令运行时尚未准备完成。')
+    const replacement = await state.agents.reset(target.conversationKey)
+    coordinator.clear(target.conversationKey)
+    await closePresentations(target.conversationKey)
+    forgetConversationCards(target.conversationKey)
+    forgetCommandInteractions(target.conversationKey)
+    await approvals.cancelConversation(target.conversationKey)
+    for (const [id, pending] of pendingModelSettings) {
+      if (pending.target.conversationKey === target.conversationKey) pendingModelSettings.delete(id)
+    }
+    rememberBinding(replacement, target, target.chatType)
+    return {
+      reply: command === RESET_COMMAND
+        ? '已重置当前会话，下一条消息将不带入之前的上下文。'
+        : '已新建空白会话，下一条消息将不带入之前的上下文。',
+      status: 'success' as const,
+    }
   }
 
   const handleCommand = async (
     command: ParsedCommand,
     binding: ConversationBinding,
   ): Promise<void> => {
-    const controller = createModelController(ctx.get('apiProxy') as HostModelApiProxy | undefined)
-    if (
-      (command.name === MODEL_COMMAND || command.name === EFFORT_COMMAND)
-      && command.input === ''
-      && controller !== undefined
-    ) {
-      if (await sendModelSetting(binding, command.name === MODEL_COMMAND ? 'model' : 'effort', controller)) return
-    }
     const commands = ctx.get('commands') as HostCommands | undefined
+    const descriptor = commandCatalog(commands, binding.owner.handle.agent)
+      .find(candidate => candidate.name === command.name)
+    if (command.input === '' && descriptor !== undefined) {
+      await openCommandInteraction(binding, descriptor)
+      return
+    }
+    const controller = createModelController(ctx.get('apiProxy') as HostSessionApiProxy | undefined)
     const outcome = await executeCommand(command, {
       agent: binding.owner.handle.agent,
       commands,
       signal: commandController.signal,
       models: controller,
     })
-    const card = command.name === HELP_COMMAND
-      ? commandHelpCard(commandCatalog(commands, binding.owner.handle.agent))
-      : commandResultCard(command.name, outcome)
-    await port.send(binding.chatId, { card })
+    await port.send(binding.chatId, { card: commandResultCard(command.name, outcome) })
   }
 
   const handleMessage = async (message: NormalizedMessage): Promise<void> => {
@@ -524,11 +728,14 @@ export function installChannel(
     const command = parseCommandLine(message.content)
     try {
       const state = await prepare()
-      if (command?.name === NEW_COMMAND || command?.name === RESET_COMMAND) {
-        await handleSessionCommand(message, command, target.conversationKey, target, state)
+      if (
+        command?.input === ''
+        && (command.name === NEW_COMMAND || command.name === RESET_COMMAND)
+      ) {
+        const descriptor = CHANNEL_COMMANDS.find(candidate => candidate.name === command.name)!
+        await sendSessionCommandPrompt(target, message.chatType, descriptor)
         return
       }
-
       let owner = await state.agents.acquire(target.conversationKey)
       let binding = rememberBinding(owner, target, message.chatType)
       if (command !== undefined) {
@@ -545,16 +752,118 @@ export function installChannel(
       coordinator.submit(owner, target, chatUserMessage(message, images))
     } catch (error) {
       const messageDetail = detail(error)
-      notify('feishu-channel: agent creation failed for chat ' + message.chatId + ': ' + messageDetail)
-      ctx.logger.warn('agent creation failed for chat %s: %s', message.chatId, messageDetail)
+      const operation = command === undefined ? 'agent creation' : 'command handling'
+      notify('feishu-channel: ' + operation + ' failed for chat ' + message.chatId + ': ' + messageDetail)
+      ctx.logger.warn('%s failed for chat %s: %s', operation, message.chatId, messageDetail)
       await port.send(message.chatId, command === undefined
         ? { text: '⚠️ 无法启动会话：' + messageDetail }
         : {
             card: commandResultCard(command.name, {
-              reply: '无法启动会话：' + messageDetail,
+              reply: '命令执行失败（/' + command.name + '）：' + messageDetail,
               status: 'failure',
             }),
           }).catch(reportSendFailure)
+    }
+  }
+
+  const currentBinding = (target: InteractionTarget): ConversationBinding | undefined => {
+    const binding = bindingsByKey.get(target.conversationKey)
+    return binding?.owner.handle.agent.session.id === target.sessionId ? binding : undefined
+  }
+
+  const interactionRefusal = (
+    target: InteractionTarget,
+    event: CardActionEvent,
+    label: string,
+  ): CardActionResponse | undefined => {
+    const refusal = refuseApprovalClick(
+      authorization,
+      { operatorId: event.operator.openId, chatId: event.chatId },
+      { chatId: target.chatId, chatType: target.chatType },
+    )
+    if (refusal === undefined) return undefined
+    notify('feishu-channel: rejected a ' + label + ' click: ' + refusal)
+    return { toast: { type: 'error', content: '你无权操作此会话' } }
+  }
+
+  const executeCommandInteraction = async (
+    pending: Extract<PendingCommandInteraction, { readonly kind: 'prompt' }>,
+    input: string,
+  ): Promise<void> => {
+    const target = pending.target
+    try {
+      let outcome
+      if (pending.command.name === NEW_COMMAND || pending.command.name === RESET_COMMAND) {
+        outcome = await resetConversation(target, pending.command.name)
+      } else {
+        const binding = currentBinding(target)
+        if (binding === undefined) throw new Error('该命令卡已失效。')
+        const command = parseCommandLine('/' + pending.command.name + (input === '' ? '' : ' ' + input))
+        if (command === undefined) throw new Error('命令参数无法解析。')
+        outcome = await executeCommand(
+          command,
+          {
+            agent: binding.owner.handle.agent,
+            commands: ctx.get('commands') as HostCommands | undefined,
+            signal: commandController.signal,
+            models: createModelController(ctx.get('apiProxy') as HostSessionApiProxy | undefined),
+          },
+        )
+      }
+      await port.updateCard(target.cardMessageId, commandResultCard(pending.command.name, outcome))
+    } catch (error) {
+      const message = detail(error)
+      notify('feishu-channel: interactive /' + pending.command.name + ' failed: ' + message)
+      await port.updateCard(target.cardMessageId, commandResultCard(pending.command.name, {
+        reply: '命令执行失败（/' + pending.command.name + '）：' + message,
+        status: 'failure',
+      })).catch(reportSendFailure)
+    }
+  }
+
+  const openSelectedCommand = async (
+    pending: Extract<PendingCommandInteraction, { readonly kind: 'menu' }>,
+    binding: ConversationBinding,
+    command: HostCommandDescriptor,
+  ): Promise<void> => {
+    try {
+      await openCommandInteraction(binding, command, pending.target.cardMessageId)
+    } catch (error) {
+      const message = detail(error)
+      notify('feishu-channel: could not open /' + command.name + ' interaction: ' + message)
+      const card = command.name === 'permission'
+        ? failedPermissionSettingCard(message)
+        : commandResultCard(command.name, { reply: message, status: 'failure' })
+      await port.updateCard(pending.target.cardMessageId, card).catch(reportSendFailure)
+    }
+  }
+
+  const applyPermissionSetting = async (
+    pending: PendingPermissionSetting,
+    choice: PermissionSettingChoice,
+  ): Promise<void> => {
+    const target = pending.target
+    try {
+      const binding = currentBinding(target)
+      if (binding === undefined) throw new Error('该权限选择卡已失效。')
+      const command = parseCommandLine('/permission ' + choice.value)
+      if (command === undefined) throw new Error('权限预设无法解析。')
+      const outcome = await executeCommand(command, {
+        agent: binding.owner.handle.agent,
+        commands: ctx.get('commands') as HostCommands | undefined,
+        signal: commandController.signal,
+        models: createModelController(ctx.get('apiProxy') as HostSessionApiProxy | undefined),
+      })
+      if (outcome.status === 'failure') {
+        await port.updateCard(target.cardMessageId, failedPermissionSettingCard(outcome.reply))
+        return
+      }
+      await port.updateCard(target.cardMessageId, settledPermissionSettingCard(choice))
+    } catch (error) {
+      const message = detail(error)
+      notify('feishu-channel: permission selection failed: ' + message)
+      await port.updateCard(target.cardMessageId, failedPermissionSettingCard(message))
+        .catch(reportSendFailure)
     }
   }
 
@@ -603,6 +912,109 @@ export function installChannel(
       return { toast: { type: 'success', content: '已重新发起请求' } }
     }
 
+    const formId = commandFormActionId(event.action.name)
+    if (formId !== undefined) {
+      const pending = pendingCommandInteractions.get(formId)
+      if (pending === undefined || pending.kind !== 'prompt' || pending.target.cardMessageId !== event.messageId) {
+        return { toast: { type: 'info', content: '该命令卡已失效' } }
+      }
+      const refusal = interactionRefusal(pending.target, event, 'command-form')
+      if (refusal !== undefined) return refusal
+      if (currentBinding(pending.target) === undefined) {
+        pendingCommandInteractions.delete(formId)
+        return { toast: { type: 'info', content: '该命令卡已失效' } }
+      }
+      const rawInput = event.action.formValue?.[COMMAND_INPUT_NAME]
+      if (rawInput !== undefined && typeof rawInput !== 'string') {
+        return { toast: { type: 'error', content: '命令参数格式无效' } }
+      }
+      pendingCommandInteractions.delete(formId)
+      trackCommandOperation(executeCommandInteraction(pending, rawInput?.trim() ?? ''))
+      return { toast: { type: 'info', content: '正在执行 /' + pending.command.name } }
+    }
+
+    const commandAction = commandInteractionActionValue(event.action.value)
+    if (commandAction !== undefined) {
+      const pending = pendingCommandInteractions.get(commandAction.id)
+      if (pending === undefined || pending.target.cardMessageId !== event.messageId) {
+        return { toast: { type: 'info', content: '该命令卡已失效' } }
+      }
+      const refusal = interactionRefusal(pending.target, event, 'command')
+      if (refusal !== undefined) return refusal
+      const binding = currentBinding(pending.target)
+      const isSessionReset = pending.kind === 'prompt'
+        && (pending.command.name === NEW_COMMAND || pending.command.name === RESET_COMMAND)
+      if (binding === undefined && !isSessionReset) {
+        pendingCommandInteractions.delete(commandAction.id)
+        return { toast: { type: 'info', content: '该命令卡已失效' } }
+      }
+      if (commandAction.action === 'open') {
+        if (pending.kind !== 'menu') return { toast: { type: 'error', content: '命令卡状态无效' } }
+        if (binding === undefined) return { toast: { type: 'info', content: '该命令卡已失效' } }
+        const command = event.action.option === undefined ? undefined : pending.commands.get(event.action.option)
+        if (command === undefined) return { toast: { type: 'error', content: '选项无效，请重新打开命令中心' } }
+        pendingCommandInteractions.delete(commandAction.id)
+        trackCommandOperation(openSelectedCommand(pending, binding, command))
+        return { toast: { type: 'info', content: '正在打开 /' + command.name } }
+      }
+      if (pending.kind !== 'prompt') return { toast: { type: 'error', content: '命令卡状态无效' } }
+      pendingCommandInteractions.delete(commandAction.id)
+      if (commandAction.action === 'cancel') {
+        trackCommandOperation(port.updateCard(
+          pending.target.cardMessageId,
+          cancelledCommandCard(pending.command.name),
+        ).catch(reportSendFailure))
+        return { toast: { type: 'success', content: '已取消 /' + pending.command.name } }
+      }
+      trackCommandOperation(executeCommandInteraction(pending, ''))
+      return { toast: { type: 'info', content: '正在执行 /' + pending.command.name } }
+    }
+
+    const permissionAction = permissionSettingActionValue(event.action.value)
+    if (permissionAction !== undefined) {
+      const pending = pendingPermissionSettings.get(permissionAction.id)
+      if (pending === undefined || pending.target.cardMessageId !== event.messageId) {
+        return { toast: { type: 'info', content: '该权限选择卡已失效' } }
+      }
+      const refusal = interactionRefusal(pending.target, event, 'permission-setting')
+      if (refusal !== undefined) return refusal
+      if (currentBinding(pending.target) === undefined) {
+        pendingPermissionSettings.delete(permissionAction.id)
+        return { toast: { type: 'info', content: '该权限选择卡已失效' } }
+      }
+      if (permissionAction.action === 'cancel') {
+        pendingPermissionSettings.set(permissionAction.id, {
+          target: pending.target,
+          select: pending.select,
+          choices: pending.choices,
+        })
+        trackCommandOperation(port.updateCard(
+          pending.target.cardMessageId,
+          permissionSettingCard(pending.select, permissionAction.id, [...pending.choices.values()]),
+        ).catch(reportSendFailure))
+        return { toast: { type: 'info', content: '已返回权限选择' } }
+      }
+      const choice = permissionAction.action === 'confirm'
+        ? pending.confirmation
+        : event.action.option === undefined ? undefined : pending.choices.get(event.action.option)
+      if (choice === undefined) return { toast: { type: 'error', content: '选项无效，请重新输入 /permission' } }
+      if (
+        permissionAction.action === 'select'
+        && choice.value === FULL_ACCESS_PERMISSION
+        && pending.select.currentValue !== FULL_ACCESS_PERMISSION
+      ) {
+        pendingPermissionSettings.set(permissionAction.id, { ...pending, confirmation: choice })
+        trackCommandOperation(port.updateCard(
+          pending.target.cardMessageId,
+          permissionConfirmationCard(choice, permissionAction.id),
+        ).catch(reportSendFailure))
+        return { toast: { type: 'info', content: '请再次确认高风险权限' } }
+      }
+      pendingPermissionSettings.delete(permissionAction.id)
+      trackCommandOperation(applyPermissionSetting(pending, choice))
+      return { toast: { type: 'info', content: '正在切换权限' } }
+    }
+
     const action = modelSettingActionValue(event.action.value)
     if (action !== undefined) {
       const pending = pendingModelSettings.get(action.id)
@@ -621,7 +1033,7 @@ export function installChannel(
       const selection = event.action.option === undefined ? undefined : pending.choices.get(event.action.option)
       if (selection === undefined) return { toast: { type: 'error', content: '选项无效，请重新输入命令' } }
       pendingModelSettings.delete(action.id)
-      void applyModelSetting(pending, selection)
+      trackCommandOperation(applyModelSetting(pending, selection))
       const content = pending.kind === 'model' ? '正在切换模型' : '正在调整推理强度'
       return { toast: { type: 'info', content } }
     }
@@ -694,6 +1106,8 @@ export function installChannel(
     bindingsBySession.clear()
     bindingsByKey.clear()
     pendingModelSettings.clear()
+    pendingCommandInteractions.clear()
+    pendingPermissionSettings.clear()
     retryCards.clear()
     reuseCardForTurn.clear()
     const closeAgents = prepared !== undefined
@@ -703,6 +1117,7 @@ export function installChannel(
       closePresentations(),
       approvals.close(),
       Promise.allSettled([...imageCollections]),
+      Promise.allSettled([...commandOperations]),
       panelQueue,
       ...(closeAgents === undefined ? [] : [closeAgents]),
     ]).then(() => undefined)

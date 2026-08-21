@@ -67,7 +67,7 @@ DSH 运维者（安装/配置/扫码）                          <-> DSH 宿主�
 | **ApprovalGate 审批闸门** | 仅应答飞书提交的 active owned turn；按 sessionId + callId + turnId 关联参数；发送前脱敏；按钮同时关联 action ID 与 messageId；决策、abort、reset、卸载均确定结算并回写终态卡 | 授权规则定义（→InboundGate） |
 | **ReplyPresenter 回复呈现** | 每个 owned turn 在构造时绑定唯一回复目标；驱动建卡、节流更新、终态、handoff 与一次性原生消息降级；close 幂等并清理 timer | 卡片内部结构规则（→CardComposer）、状态投影（→TurnView） |
 | **TurnView 回合视图** | 将单个回合事件投影为卡片实际消费的 answer/steps/tokens/model/duration/error；重复事件幂等；首个终态后冻结；不保存 reasoning 与工具结果正文 | 卡片 JSON 结构（→CardComposer） |
-| **CardComposer 卡片组装** | 纯函数渲染规则: markdown 分块（不切断围栏/表格）、表格溢出 compact/truncate、限额巡检（200 元素/5 表/28KB）、header/时间线/footer 组装、工具详情脱敏、语义状态着色与 spinner；交互卡子模块：原语（card-design.ts）、设计令牌（card-tokens.ts）、命令结果/帮助卡（command-card.ts）、模型设置卡（model-card.ts） | 状态投影（→TurnView）、传输（→ChannelTransport） |
+| **CardComposer 卡片组装** | 纯函数渲染规则: markdown 分块（不切断围栏/表格）、表格溢出 compact/truncate、限额巡检（200 元素/5 表/28KB）、header/时间线/footer 组装、工具详情脱敏、语义状态着色与 spinner；交互卡子模块：原语（card-design.ts）、设计令牌（card-tokens.ts）、命令菜单/输入/确认/结果（command-card.ts）、权限设置（permission-card.ts）、模型设置（model-card.ts） | 状态投影（→TurnView）、传输（→ChannelTransport） |
 
 辅助（非概念）: model-catalog.ts —— HostModelDirectory 解析助手（route/catalog/currentModel），命令面与模型设置卡共用，避免两处解析漂移。
 
@@ -102,11 +102,11 @@ DSH 运维者（安装/配置/扫码）                          <-> DSH 宿主�
 - message handler 返回包含 agent 获取、图片处理和 followup 提交的真实 Promise；transport 完成边界不会提前释放
 - 回复定向在入站时冻结到 turn：replyTo 指向触发消息，话题群内 replyInThread；后续消息不能覆盖
 - 原生引用边界: `replyTo` 直接使用飞书回复消息接口，引用栏由客户端渲染；接口不提供引用栏的布局、底色、间距或圆角参数，插件不能把引用栏与同一条卡片拆成两个视觉容器。主卡保留回复关系，并用白底顶栏避免在原生白色引用栏和白色正文之间插入独立灰色圆角层
-- 命令行（/ 开头）不经过模型: /new 与 /reset 替换会话；/stop 调 agent.cancel；/help 列出宿主命令 + 自有命令；未知命令报错并给列表
+- 命令行（/ 开头）不经过模型。裸命令按宿主 descriptor 进入原生交互卡：`input` 命令使用 CardKit 表单，无 `input` 命令要求确认，`/help` 使用动态命令选择器，模型/推理强度/权限使用宿主数据生成下拉框；显式参数直接执行。`danger-full-access` 必须二次确认。每次回调校验 action id、message id、chat、operator 与当前 session；同会话的新卡使旧命令卡失效。/new 与 /reset 替换会话，/stop 调 agent.cancel。动态宿主命令按当前 DSH `execute(agent, line, images, signal)` 契约执行；飞书文本命令传空附件数组，宿主异常归一为命令失败卡，不伪装成会话启动失败
 - 入站异常分类: agent 创建失败 → chat 可见失败行；发送失败 → 运维日志 + 日志
 
 ### 4.4 渲染
-- 冻结 mockup 中的 `output: card` 与 `title` 字样仅是原设计稿的分组标注，不是 0.2.0 的运行时配置；为保持 UI/UX 基线不修改该设计资产
+- 冻结 mockup 中的 `output: card` 与 `title` 字样仅是原设计稿的分组标注，不是运行时配置；为保持 UI/UX 基线不修改该设计资产
 - 模型可见内容 = 会话日志可回放: 渲染只消费 session/event，绝不发明内容
 - 流式卡片生命周期: step/start 建卡（spinner）→ 增量更新（节流）→ turn/end 终态（completed/failed）
 - 答案可达性: 建卡失败（无卡片权限）→ 累积文本以 markdown 消息一次性发出
@@ -169,7 +169,8 @@ DSH 运维者（安装/配置/扫码）                          <-> DSH 宿主�
 | src/model-catalog.ts | 非概念助手 | HostModelDirectory 解析（route/catalog/currentModel），命令面与模型设置卡共用 |
 | src/card-tokens.ts | CardComposer 设计令牌 | 语义色映射（CARD_COLOR/CardTone/toneColor）与间距刻度（SPACE_2..6）——design-system.md 的代码层单一事实源 |
 | src/card-design.ts | CardComposer 子模块 | 交互卡原语（interactiveCard/interactiveStatusLine/interactiveDivider/interactiveFieldRow/interactivePlainSection/statusTag/cardKitStatusLine） |
-| src/command-card.ts | CardComposer 子模块 | 命令结果卡与帮助卡组装 |
+| src/command-card.ts | CardComposer 子模块 | 动态命令选择器、参数表单、动作确认、取消与结果卡组装 |
+| src/permission-card.ts | CardComposer 子模块 | 会话权限选择、高风险二次确认、成功与失败卡组装 |
 | src/model-card.ts | CardComposer 子模块 | 模型设置卡组装（选项来自 model-catalog） |
 | src/presentation/markdown.ts | CardComposer 内容结构 | 显式 prose/list/fence/table 扫描、卡片文本规范化、结构安全分块、表格溢出、流式 think 标签过滤 |
 | src/presentation/card-budget.ts | CardComposer 容量边界 | 单次 JSON 深度遍历统计 UTF-8 字节、元素与 Markdown/native table，并拒绝循环或不可序列化值 |
@@ -195,14 +196,15 @@ DSH 运维者（安装/配置/扫码）                          <-> DSH 宿主�
 | 交互卡原语结构（状态行/字段行/纯文本承载） | card-design.spec |
 | 审批卡片冻结 UI | ui-contract.spec、channel.spec |
 | session/call/turn 参数隔离、脱敏、send 前中后 abort、跨 chat 拒绝、按 conversation 取消、close 幂等 | approval-gate.spec、plugin.spec |
-| 命令结果卡/帮助卡组装 | command-card.spec |
+| 命令选择/输入/确认/取消/结果卡组装 | command-card.spec、ui-contract.spec |
+| 权限选项只取宿主投影、custom 不可写、full access 二次确认与结算卡 | permission-card.spec、plugin.spec |
 | 模型设置卡选项/结算卡/失败卡；选项与命令面同源（model-catalog） | model-card.spec |
 | 图片流式落盘、读前限额、存储/取消出口清理与用户失败笔记 | images.spec、plugin.spec |
 | Onboarding 保存结果、过期码节流、卸载后无副作用且不输出 secret | onboarding.spec、plugin.spec |
 | 面板分页 reconcile: 增/删/去重/removeUnknown/失败降级/生命周期取消 | slash-panel.spec、plugin.spec |
 | 边界承诺组合测试（经 apply 挂载可控 transport 与 host 测试替身）: 当前 generation 建/续、外部 live agent 隔离、消息 Promise、不可变回复目标、授权、命令、审批、富卡片、图片、面板、卸载与扫码 | plugin.spec、harness.ts |
 | 授权各分支 | authorization.spec |
-| 命令各分支 | commands.spec |
+| 命令各分支；宿主命令四参数契约；帮助菜单跳转；表单提交；危险权限确认；旧卡失效；越权拒绝；异常失败卡 | commands.spec、plugin.spec、channel-session-command.spec |
 | 会话键/当前 generation/无兼容分支 | conversation.spec |
 | owned agent 恢复、外部 live 隔离、并发 acquire/reset、close 幂等 | agent-registry.spec |
 | queued turn 关联、回复目标冻结、按 conversation key 隔离 reset/retry | turn-coordinator.spec、channel-session-command.spec、plugin.spec |

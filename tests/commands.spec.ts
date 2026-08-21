@@ -13,7 +13,7 @@ import {
   RESET_COMMAND,
   STOP_COMMAND,
 } from '../src/commands.ts'
-import type { HostAgent, HostCommands, HostModelController } from '../src/host.ts'
+import type { HostAgent, HostCommandImage, HostCommands, HostModelController } from '../src/host.ts'
 
 const agent = { id: 'a', session: { id: 's' }, followup: () => {}, cancel: vi.fn() } as unknown as HostAgent
 
@@ -101,6 +101,22 @@ describe('executeCommand', () => {
     const outcome = await run('/clear', commands)
     expect(outcome.status).toBe('failure')
     expect(outcome.reply).toContain('boom')
+  })
+
+  it('passes an empty attachment batch before the cancellation signal to host commands', async () => {
+    const commands = {
+      list: () => [{ name: 'permission', description: '切换权限' }],
+      async execute(_agent: HostAgent, _line: string, images: readonly HostCommandImage[], signal: AbortSignal) {
+        expect(images).toEqual([])
+        expect(signal.aborted).toBe(false)
+        return { result: { kind: 'success' as const, text: 'current preset workspace-write' } }
+      },
+    } satisfies HostCommands
+
+    await expect(run('/permission', commands)).resolves.toEqual({
+      reply: 'current preset workspace-write',
+      status: 'success',
+    })
   })
 
   it('switches to an advertised model and applies its default reasoning effort', async () => {

@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { approvalCard, settledCard } from '../src/approval-gate.ts'
-import { commandHelpCard, commandResultCard } from '../src/command-card.ts'
-import type { HostModelDirectory, HostSessionEvent } from '../src/host.ts'
+import { commandHelpCard, commandPromptCard, commandResultCard } from '../src/command-card.ts'
+import type { HostModelDirectory, HostPermissionSelect, HostSessionEvent } from '../src/host.ts'
 import {
   modelSettingCard,
   modelSettingChoices,
   settledModelSettingCard,
 } from '../src/model-card.ts'
+import { permissionSettingCard, permissionSettingChoices } from '../src/permission-card.ts'
 import { TurnView } from '../src/presentation/turn-view.ts'
 import { renderCard, type CardRenderOptions } from '../src/presentation/feishu-card.ts'
 import { UI_CONTRACT } from './fixtures/ui-contract.ts'
@@ -190,7 +191,7 @@ describe('frozen UI/UX contract', () => {
     }).toEqual(UI_CONTRACT.approval.settled)
   })
 
-  it('freezes command result and help cards', () => {
+  it('freezes command result, discovery, confirmation, and input cards', () => {
     const success = commandResultCard('stop', {
       reply: '⏹ 已停止当前任务。',
       status: 'success',
@@ -205,13 +206,69 @@ describe('frozen UI/UX contract', () => {
     const help = commandHelpCard([
       { name: 'new', description: '新建会话' },
       { name: 'model', description: '查看或更换当前会话模型' },
-    ]) as Json
+    ], 'menu-1') as Json
+    const select = required(required(actionRows(help)[0], 'command menu actions').actions[0], 'command menu')
     expect({
       wide: help.config.wide_screen_mode,
       status: interactiveStatus(help),
-      text: help.elements[2].text.content,
+      placeholder: select.placeholder.content,
+      options: select.options.map((option: Json) => option.text.content),
       note: notes(help)[0],
     }).toEqual(UI_CONTRACT.command.help)
+
+    const confirm = commandPromptCard({
+      name: 'compact',
+      description: '压缩较早的会话历史',
+    }, 'confirm-1') as Json
+    expect({
+      wide: confirm.config.wide_screen_mode,
+      status: interactiveStatus(confirm),
+      fields: fields(confirm),
+      actions: required(actionRows(confirm)[0], 'command confirmation actions').actions
+        .map((action: Json) => ({
+          label: action.text.content,
+          type: action.type,
+          action: action.value.action,
+        })),
+    }).toEqual(UI_CONTRACT.command.confirm)
+
+    const input = commandPromptCard({
+      name: 'feedback',
+      description: '记录反馈',
+      input: { hint: '<text>' },
+    }, 'input-1') as Json
+    const form = required(input.elements.find((element: Json) => element.tag === 'form'), 'command input form')
+    expect({
+      wide: input.config.wide_screen_mode,
+      status: interactiveStatus(input),
+      fields: fields(input),
+      placeholder: form.elements[0].placeholder.content,
+      submit: form.elements[1].text.content,
+    }).toEqual(UI_CONTRACT.command.input)
+  })
+
+  it('freezes the permission picker', () => {
+    const permissions: HostPermissionSelect = {
+      currentValue: 'workspace-write',
+      options: [
+        { value: 'workspace-write', name: 'Workspace write' },
+        { value: 'danger-full-access', name: 'Full access' },
+      ],
+    }
+    const picker = permissionSettingCard(
+      permissions,
+      'permission-1',
+      permissionSettingChoices(permissions),
+    ) as Json
+    const select = required(required(actionRows(picker)[0], 'permission picker actions').actions[0], 'permission picker')
+    expect({
+      wide: picker.config.wide_screen_mode,
+      status: interactiveStatus(picker),
+      fields: fields(picker),
+      placeholder: select.placeholder.content,
+      options: select.options.map((option: Json) => option.text.content),
+      note: notes(picker)[0],
+    }).toEqual(UI_CONTRACT.permission.picker)
   })
 
   it('freezes model picker and settled cards', () => {

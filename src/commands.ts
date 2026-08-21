@@ -117,12 +117,17 @@ async function executeHostCommand(
   if (context.commands === undefined) {
     return failure('⚠️ 本部署没有组合命令运行时，/' + command.name + ' 无法执行。')
   }
-  const execution = await context.commands.execute(context.agent, command.source, context.signal)
+  let execution
+  try {
+    execution = await context.commands.execute(context.agent, command.source, [], context.signal)
+  } catch (error) {
+    return commandFailure(command.name, error)
+  }
   if (execution === undefined) {
     return failure('⚠️ 未知命令 /' + command.name + '。\n\n' + helpText(context.commands, context.agent))
   }
   if (execution.result.kind === 'error') {
-    return failure('⚠️ /' + command.name + ' 执行失败：' + execution.result.text)
+    return commandFailure(command.name, execution.result.text)
   }
   return success(execution.result.text ?? '')
 }
@@ -226,7 +231,7 @@ function matchingModels(directory: HostModelDirectory, input: string): CatalogEn
 
 function commandFailure(name: string, error: unknown): CommandOutcome {
   const detail = error instanceof Error ? error.message : String(error)
-  return failure('⚠️ /' + name + ' 执行失败：' + detail)
+  return failure('⚠️ 命令执行失败（/' + name + '）：' + detail)
 }
 
 function success(reply: string): CommandOutcome {

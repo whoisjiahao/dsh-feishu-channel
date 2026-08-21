@@ -4,7 +4,7 @@
  * packages) lets the package build self-contained; a composed DSH profile
  * supplies the real implementations at runtime. Field shapes mirror
  * @deepseek-ai/dsh-agent, @deepseek-ai/dsh-session and the approval seam as of
- * dsh 0.1.0-rc.
+ * dsh 0.1.0-rc.8.
  * @module dsh-feishu-channel/host
  */
 
@@ -112,9 +112,16 @@ export interface HostToolDefinition {
 }
 
 /** One command this deployment offers. */
+export interface HostCommandInputDescriptor {
+  readonly hint: string
+  readonly images?: boolean | undefined
+}
+
+/** One command this deployment offers. */
 export interface HostCommandDescriptor {
   readonly name: string
   readonly description: string
+  readonly input?: HostCommandInputDescriptor | undefined
 }
 
 /** One settled command execution. */
@@ -124,10 +131,22 @@ export interface HostCommandExecution {
     | { readonly kind: 'error'; readonly text: string }
 }
 
+/** One encoded image accepted by the Host command runtime. */
+export interface HostCommandImage {
+  readonly mediaType: string
+  readonly data: string
+  readonly name?: string
+}
+
 /** The commands runtime: slash commands dispatched without a model turn. */
 export interface HostCommands {
   list(agent: HostAgent): readonly HostCommandDescriptor[]
-  execute(agent: HostAgent, line: string, signal: AbortSignal): Promise<HostCommandExecution | undefined>
+  execute(
+    agent: HostAgent,
+    line: string,
+    images: readonly HostCommandImage[],
+    signal: AbortSignal,
+  ): Promise<HostCommandExecution | undefined>
 }
 
 /** Complete model selection for one live conversation. */
@@ -177,6 +196,19 @@ export interface HostModelController {
   select(sessionId: string, selection: HostModelSelection): Promise<HostModelSelection>
 }
 
+/** One permission preset advertised by the session projection. */
+export interface HostPermissionOption {
+  readonly value: string
+  readonly name: string
+  readonly description?: string | undefined
+}
+
+/** Current permission preset plus every host-approved switch target. */
+export interface HostPermissionSelect {
+  readonly options: readonly HostPermissionOption[]
+  readonly currentValue: string
+}
+
 /** Host API envelope returned by the model-selection RPC surface. */
 export type HostApiResult<T> =
   | { readonly ok: true; readonly value: T }
@@ -191,13 +223,23 @@ interface HostApiResponse<T> {
   readonly result: HostApiResult<T>
 }
 
-/** Narrow apiProxy surface used to inspect and update one session's model. */
-export interface HostModelApiProxy {
+/** Narrow apiProxy surface used by interactive session controls. */
+export interface HostSessionApiProxy {
   readonly sessions: {
     models(request: HostApiRequest<{ readonly sessionId: string }>): Promise<HostApiResponse<HostModelDirectory>>
     selectModel(
       request: HostApiRequest<HostModelSelection & { readonly sessionId: string }>,
     ): Promise<HostApiResponse<{ readonly selected: HostModelSelection }>>
+    history?(
+      request: HostApiRequest<{
+        readonly sessionId: string
+        readonly maxMessages?: number | undefined
+      }>,
+    ): Promise<HostApiResponse<{
+      readonly projections?: {
+        readonly values: { readonly permissions?: HostPermissionSelect | undefined }
+      } | undefined
+    }>>
   }
 }
 

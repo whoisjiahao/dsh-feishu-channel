@@ -28,9 +28,11 @@ import type { ChannelPort } from '../src/channel.ts'
 import type {
   HostAgentOptions,
   HostAttachments,
+  HostCommandDescriptor,
   HostCommands,
   HostDefaultModel,
   HostImageLimits,
+  HostPermissionSelect,
   HostSessionPersistence,
   HostUserMessage,
 } from '../src/host.ts'
@@ -303,7 +305,16 @@ export function fakeMessage(overrides: Partial<NormalizedMessage> = {}): Normali
 /** One card action click, as the platform would deliver it. */
 export function clickAction(
   value: unknown,
-  by: { openId?: string; chatId?: string; name?: string; messageId?: string; option?: string } = {},
+  by: {
+    openId?: string
+    chatId?: string
+    name?: string
+    messageId?: string
+    option?: string
+    tag?: string
+    actionName?: string
+    formValue?: Record<string, unknown>
+  } = {},
 ): CardActionEvent {
   return {
     messageId: by.messageId ?? 'om_sent_1',
@@ -313,9 +324,11 @@ export function clickAction(
       ...(by.name === undefined ? {} : { name: by.name }),
     },
     action: {
-      tag: 'button',
+      tag: by.tag ?? 'button',
       value,
       ...(by.option === undefined ? {} : { option: by.option }),
+      ...(by.actionName === undefined ? {} : { name: by.actionName }),
+      ...(by.formValue === undefined ? {} : { formValue: by.formValue }),
     },
   }
 }
@@ -714,13 +727,13 @@ export function createFakeAttachments(limits: Partial<HostImageLimits> = {}) {
 
 /** An in-memory `commands` runtime recording every dispatched line. */
 export function createFakeCommands(
-  available: { name: string; description: string }[] = [{ name: 'status', description: '查看运行状态' }],
+  available: HostCommandDescriptor[] = [{ name: 'status', description: '查看运行状态' }],
   outcomes: Record<string, { kind: 'success'; text?: string } | { kind: 'error'; text: string }> = {},
 ) {
   const executed: string[] = []
   const service: HostCommands = {
     list: () => available,
-    async execute(_agent, line, _signal) {
+    async execute(_agent, line, _images, _signal) {
       executed.push(line)
       const name = parseCommandLine(line)?.name ?? ''
       if (!available.some(c => c.name === name)) return undefined
@@ -775,6 +788,7 @@ export function createFakeModelApi(
       reasoning?: { efforts: { id: string; name: string }[]; defaultEffort?: string }
     }[] }[]
   },
+  permissions?: HostPermissionSelect,
 ) {
   const selected: { sessionId: string; provider: string; model: string; reasoningEffort?: string }[] = []
   const state = { failModels: false, failSelect: false }
@@ -795,6 +809,18 @@ export function createFakeModelApi(
         selected.push({ sessionId, ...selection })
         directory.current = { ...selection }
         return { result: { ok: true as const, value: { selected: selection } } }
+      },
+      async history(_request: { rpcId: string; payload: { sessionId: string; maxMessages?: number } }) {
+        return {
+          result: {
+            ok: true as const,
+            value: {
+              projections: {
+                values: { ...(permissions === undefined ? {} : { permissions }) },
+              },
+            },
+          },
+        }
       },
     },
   }

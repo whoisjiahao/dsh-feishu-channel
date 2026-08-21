@@ -139,10 +139,20 @@ describe('Feishu session commands', () => {
     } as NormalizedMessage
     handlers.get('message')?.(message)
 
-    await vi.waitFor(() => { expect(created).toHaveLength(1) })
     await vi.waitFor(() => { expect(sends).toHaveLength(1) })
-    expect(JSON.stringify(sends[0])).toContain('空白会话')
-    expect(JSON.stringify(sends[0])).toContain("<text_tag color='green'>已完成</text_tag>")
+    expect(created).toHaveLength(0)
+    expect(JSON.stringify(sends[0])).toContain("<text_tag color='orange'>待确认</text_tag>")
+    const newResponse = await handlers.get('cardAction')?.({
+      messageId: 'reply-1',
+      chatId: 'oc_1',
+      operator: { openId: 'ou_1', name: 'Jiahao' },
+      action: { tag: 'button', value: buttonValueFrom(sends[0]) },
+    })
+    expect(newResponse).toEqual({ toast: { type: 'info', content: '正在执行 /new' } })
+    await vi.waitFor(() => { expect(created).toHaveLength(1) })
+    await vi.waitFor(() => {
+      expect(updateCard).toHaveBeenCalledWith('reply-1', expect.objectContaining({ config: expect.any(Object) }))
+    })
     await vi.waitFor(() => {
       expect(panelCommands).toEqual(expect.arrayContaining(['new', 'reset', 'stop', 'model', 'effort', 'help']))
     })
@@ -154,7 +164,7 @@ describe('Feishu session commands', () => {
     handlers.get('message')?.({ ...message, messageId: 'om_help', content: '/help' })
     await vi.waitFor(() => { expect(sends).toHaveLength(2) })
     expect(JSON.stringify(sends[1])).toContain('**命令中心**')
-    expect(JSON.stringify(sends[1])).toContain('/model  ·  查看或更换当前会话模型')
+    expect(JSON.stringify(sends[1])).toContain('/model · 查看或更换当前会话模型')
 
     handlers.get('message')?.({ ...message, messageId: 'om_model', content: '/model' })
     await vi.waitFor(() => { expect(sends).toHaveLength(3) })
@@ -240,13 +250,25 @@ describe('Feishu session commands', () => {
 
     handlers.get('message')?.({ ...message, messageId: 'om_status', content: '/status' })
     await vi.waitFor(() => { expect(sends).toHaveLength(6) })
+    expect(executeCommand).not.toHaveBeenCalled()
+    const statusResponse = await handlers.get('cardAction')?.({
+      messageId: 'reply-6',
+      chatId: 'oc_1',
+      operator: { openId: 'ou_1', name: 'Jiahao' },
+      action: { tag: 'button', value: buttonValueFrom(sends[5]) },
+    })
+    expect(statusResponse).toEqual({ toast: { type: 'info', content: '正在执行 /status' } })
+    await vi.waitFor(() => { expect(executeCommand).toHaveBeenCalledTimes(1) })
     expect(executeCommand).toHaveBeenCalledWith(
       created[0]!.agent,
       '/status',
+      [],
       expect.any(AbortSignal),
     )
-    expect(JSON.stringify(sends[5])).toContain('运行状态正常')
-    expect(JSON.stringify(sends[5])).toContain("<text_tag color='green'>已完成</text_tag>")
+    await vi.waitFor(() => {
+      const result = updateCard.mock.calls.find(([messageId]) => messageId === 'reply-6')?.[1]
+      expect(JSON.stringify(result)).toContain('运行状态正常')
+    })
 
     await ctx.fiber.dispose()
   })
@@ -261,4 +283,11 @@ function selectorFrom(input: unknown): {
   }).card
   const action = card.elements.find(element => element.tag === 'action')?.actions?.[0]
   return action as { readonly value: unknown; readonly options: readonly { readonly value: string }[] }
+}
+
+function buttonValueFrom(input: unknown): unknown {
+  const card = (input as {
+    card: { elements: readonly { tag: string; actions?: readonly { value: unknown }[] }[] }
+  }).card
+  return card.elements.find(element => element.tag === 'action')?.actions?.[0]?.value
 }

@@ -19,7 +19,7 @@
         # sessionScope: chat              # chat-thread / chat-sender 分得更细
         # showProcess: true               # 关闭则只发答案
         # attachImages: false             # 仅视觉路由开启
-        # syncSlashCommands: true         # 同步命令到飞书斜杠面板
+        # syncSlashCommands: true         # 同步命令到飞书斜杠面板；裸命令在聊天内打开交互卡
         # denyTools: [ask_user_question, exit_plan_mode]  # 答案无法到达聊天的工具
         requireMention: true
         # 授权只收窄、不设门禁：谁能私聊机器人由应用可见范围决定。默认服务任何

@@ -8,7 +8,15 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { HostApprovalOutcome, HostApprovalRequest, HostSession, HostSessionEvent } from '../src/host.ts'
+import type {
+  HostAgent,
+  HostApprovalOutcome,
+  HostApprovalRequest,
+  HostCommandImage,
+  HostCommands,
+  HostSession,
+  HostSessionEvent,
+} from '../src/host.ts'
 import type { RegisterAppPort } from '../src/onboarding.ts'
 import { RETRY_ACTION, COPY_ERROR_ACTION } from '../src/presentation/feishu-card.ts'
 import {
@@ -422,6 +430,10 @@ describe('conversation-scope isolation', () => {
     const second = h.agents.created[1]!
 
     await h.fake.emitMessage(fakeMessage({ threadId: 'omt_1', messageId: 'om_new', content: '/new' }))
+    await vi.waitFor(() => { expect(h.fake.sent).toHaveLength(1) })
+    expect(await h.fake.emitCardAction(clickAction(firstButtonValue(h.fake.sent[0]!.input)))).toEqual({
+      toast: { type: 'info', content: '正在执行 /new' },
+    })
     await vi.waitFor(() => { expect(h.agents.created).toHaveLength(3) })
     expect(first.agent.cancel).toHaveBeenCalledWith('user')
     expect(first.dispose).toHaveBeenCalledTimes(1)
@@ -501,13 +513,173 @@ describe('authorization', () => {
 })
 
 describe('slash commands', () => {
-  it('cancels the running turn on /stop and answers with a result card', async () => {
+  it('asks for confirmation before an argument-free command and settles the same card', async () => {
     const h = await mount()
     await h.fake.emitMessage(fakeMessage({ content: '/stop' }))
     const created = await firstAgent(h)
     await vi.waitFor(() => { expect(h.fake.sent).toHaveLength(1) })
-    expect(created.agent.cancel).toHaveBeenCalledWith('user')
-    expect(JSON.stringify(h.fake.sent[0]!.input)).toContain('已停止当前任务')
+    expect(created.agent.cancel).not.toHaveBeenCalled()
+    expect(JSON.stringify(h.fake.sent[0]!.input)).toContain('待确认')
+
+    const response = await h.fake.emitCardAction(clickAction(firstButtonValue(h.fake.sent[0]!.input)))
+    expect(response).toEqual({ toast: { type: 'info', content: '正在执行 /stop' } })
+    await vi.waitFor(() => { expect(created.agent.cancel).toHaveBeenCalledWith('user') })
+    await vi.waitFor(() => { expect(h.fake.updated).toHaveLength(1) })
+    expect(JSON.stringify(h.fake.updated[0]!.card)).toContain('已停止当前任务')
+  })
+
+  it('collects a host command argument through a CardKit form', async () => {
+    const commands = createFakeCommands([{
+      name: 'feedback',
+      description: '记录反馈',
+      input: { hint: '<text>' },
+    }])
+    const h = await mount({}, { commands: commands.service })
+    await h.fake.emitMessage(fakeMessage({ content: '/feedback' }))
+    await firstAgent(h)
+    await vi.waitFor(() => { expect(h.fake.sent).toHaveLength(1) })
+    const submitName = formSubmitName(h.fake.sent[0]!.input)
+    expect(commands.executed).toEqual([])
+
+    const response = await h.fake.emitCardAction(clickAction(undefined, {
+      actionName: submitName,
+      formValue: { command_input: '卡片体验很清晰' },
+    }))
+    expect(response).toEqual({ toast: { type: 'info', content: '正在执行 /feedback' } })
+    await vi.waitFor(() => { expect(commands.executed).toEqual(['/feedback 卡片体验很清晰']) })
+    await vi.waitFor(() => { expect(h.fake.updated).toHaveLength(1) })
+  })
+
+  it('opens the selected command inside the existing help card', async () => {
+    const commands = createFakeCommands([{
+      name: 'feedback',
+      description: '记录反馈',
+      input: { hint: '<text>' },
+    }])
+    const h = await mount({}, { commands: commands.service })
+    await h.fake.emitMessage(fakeMessage({ content: '/help' }))
+    await firstAgent(h)
+    await vi.waitFor(() => { expect(h.fake.sent).toHaveLength(1) })
+    const selector = selectorFrom(h.fake.sent[0]!.input)
+
+    const response = await h.fake.emitCardAction(clickAction(selector.value, {
+      option: 'feedback',
+    }))
+
+    expect(response).toEqual({ toast: { type: 'info', content: '正在打开 /feedback' } })
+    await vi.waitFor(() => { expect(h.fake.updated).toHaveLength(1) })
+    expect(JSON.stringify(h.fake.updated[0]!.card)).toContain('dsh_command_form')
+    expect(JSON.stringify(h.fake.updated[0]!.card)).toContain('/feedback')
+    expect(commands.executed).toEqual([])
+  })
+
+  it('reads permission options from the session projection and executes the selected preset', async () => {
+    const commands = createFakeCommands([{
+      name: 'permission',
+      description: '切换权限预设',
+      input: { hint: '<preset>' },
+    }])
+    const api = createFakeModelApi({
+      current: { provider: 'provider-a', model: 'model-a' },
+      groups: [],
+    }, {
+      currentValue: 'workspace-write',
+      options: [
+        { value: 'read-only', name: 'Read only' },
+        { value: 'workspace-write', name: 'Workspace write' },
+        { value: 'danger-full-access', name: 'Full access' },
+      ],
+    })
+    const h = await mount({}, { commands: commands.service, apiProxy: api.api })
+    await h.fake.emitMessage(fakeMessage({ content: '/permission' }))
+    await firstAgent(h)
+    await vi.waitFor(() => { expect(h.fake.sent).toHaveLength(1) })
+    const selector = selectorFrom(h.fake.sent[0]!.input)
+    expect(selector.options.map(option => option.value)).toEqual([
+      'read-only',
+      'workspace-write',
+      'danger-full-access',
+    ])
+
+    const response = await h.fake.emitCardAction(clickAction(selector.value, {
+      messageId: 'om_sent_1',
+      option: 'read-only',
+    }))
+    expect(response).toEqual({ toast: { type: 'info', content: '正在切换权限' } })
+    await vi.waitFor(() => { expect(commands.executed).toEqual(['/permission read-only']) })
+    await vi.waitFor(() => { expect(h.fake.updated).toHaveLength(1) })
+    expect(JSON.stringify(h.fake.updated[0]!.card)).toContain('read-only')
+  })
+
+  it('requires a second click before enabling full-access permissions', async () => {
+    const commands = createFakeCommands([{
+      name: 'permission',
+      description: '切换权限预设',
+      input: { hint: '<preset>' },
+    }])
+    const api = createFakeModelApi({
+      current: { provider: 'provider-a', model: 'model-a' },
+      groups: [],
+    }, {
+      currentValue: 'workspace-write',
+      options: [
+        { value: 'workspace-write', name: 'Workspace write' },
+        { value: 'danger-full-access', name: 'Full access' },
+      ],
+    })
+    const h = await mount({}, { commands: commands.service, apiProxy: api.api })
+    await h.fake.emitMessage(fakeMessage({ content: '/permission' }))
+    await firstAgent(h)
+    await vi.waitFor(() => { expect(h.fake.sent).toHaveLength(1) })
+    const selector = selectorFrom(h.fake.sent[0]!.input)
+
+    const firstResponse = await h.fake.emitCardAction(clickAction(selector.value, {
+      option: 'danger-full-access',
+    }))
+
+    expect(firstResponse).toEqual({ toast: { type: 'info', content: '请再次确认高风险权限' } })
+    await vi.waitFor(() => { expect(h.fake.updated).toHaveLength(1) })
+    expect(JSON.stringify(h.fake.updated[0]!.card)).toContain('高风险')
+    expect(commands.executed).toEqual([])
+
+    const confirm = firstButtonValue({ card: h.fake.updated[0]!.card })
+    const secondResponse = await h.fake.emitCardAction(clickAction(confirm))
+    expect(secondResponse).toEqual({ toast: { type: 'info', content: '正在切换权限' } })
+    await vi.waitFor(() => {
+      expect(commands.executed).toEqual(['/permission danger-full-access'])
+    })
+    await vi.waitFor(() => { expect(h.fake.updated).toHaveLength(2) })
+  })
+
+  it('rejects a command-card click from an operator outside the approver list', async () => {
+    const h = await mount({ approvers: ['ou_boss'] })
+    await h.fake.emitMessage(fakeMessage({ content: '/stop' }))
+    const created = await firstAgent(h)
+    await vi.waitFor(() => { expect(h.fake.sent).toHaveLength(1) })
+
+    const response = await h.fake.emitCardAction(clickAction(
+      firstButtonValue(h.fake.sent[0]!.input),
+      { openId: 'ou_intruder' },
+    ))
+
+    expect(response).toEqual({ toast: { type: 'error', content: '你无权操作此会话' } })
+    expect(created.agent.cancel).not.toHaveBeenCalled()
+    expect(h.fake.updated).toEqual([])
+  })
+
+  it('expires an older command card when a newer interaction replaces it', async () => {
+    const h = await mount()
+    await h.fake.emitMessage(fakeMessage({ messageId: 'om_stop_1', content: '/stop' }))
+    const created = await firstAgent(h)
+    await vi.waitFor(() => { expect(h.fake.sent).toHaveLength(1) })
+    const staleAction = firstButtonValue(h.fake.sent[0]!.input)
+
+    await h.fake.emitMessage(fakeMessage({ messageId: 'om_stop_2', content: '/stop' }))
+    await vi.waitFor(() => { expect(h.fake.sent).toHaveLength(2) })
+    const response = await h.fake.emitCardAction(clickAction(staleAction, { messageId: 'om_sent_1' }))
+
+    expect(response).toEqual({ toast: { type: 'info', content: '该命令卡已失效' } })
+    expect(created.agent.cancel).not.toHaveBeenCalled()
   })
 
   it('answers unknown commands with the help listing', async () => {
@@ -531,9 +703,31 @@ describe('slash commands', () => {
     await h.fake.emitMessage(fakeMessage({ content: '/status' }))
     await firstAgent(h)
     await vi.waitFor(() => { expect(h.fake.sent).toHaveLength(1) })
-    expect(JSON.stringify(h.fake.sent[0]!.input)).toContain('执行失败')
-    expect(JSON.stringify(h.fake.sent[0]!.input)).toContain('boom')
-    expect(commands.executed).toEqual(['/status'])
+    expect(commands.executed).toEqual([])
+    await h.fake.emitCardAction(clickAction(firstButtonValue(h.fake.sent[0]!.input)))
+    await vi.waitFor(() => { expect(commands.executed).toEqual(['/status']) })
+    await vi.waitFor(() => { expect(h.fake.updated).toHaveLength(1) })
+    expect(JSON.stringify(h.fake.updated[0]!.card)).toContain('执行失败')
+    expect(JSON.stringify(h.fake.updated[0]!.card)).toContain('boom')
+  })
+
+  it('labels a thrown host command as a command failure', async () => {
+    const commands = {
+      list: () => [{ name: 'permission', description: '切换权限' }],
+      async execute(_agent: HostAgent, _line: string, _images: readonly HostCommandImage[], signal: AbortSignal) {
+        if (signal.aborted) throw new Error('unexpected abort')
+        throw new Error('host command crashed')
+      },
+    } satisfies HostCommands
+    const h = await mount({}, { commands })
+
+    await h.fake.emitMessage(fakeMessage({ content: '/permission read-only' }))
+    await firstAgent(h)
+    await vi.waitFor(() => { expect(h.fake.sent).toHaveLength(1) })
+    const card = JSON.stringify(h.fake.sent[0]!.input)
+    expect(card).toContain('命令执行失败')
+    expect(card).toContain('host command crashed')
+    expect(card).not.toContain('无法启动会话')
   })
 
   it('explains when no session model control service exists', async () => {
@@ -592,6 +786,11 @@ describe('slash commands', () => {
     await vi.waitFor(() => { expect(h.fake.sent).toHaveLength(1) })
 
     await h.fake.emitMessage(fakeMessage({ messageId: 'om_new', content: '/new' }))
+    await vi.waitFor(() => { expect(h.fake.sent).toHaveLength(2) })
+    expect(JSON.stringify(h.fake.sent[1]!.input)).toContain('待确认')
+    expect(await h.fake.emitCardAction(clickAction(firstButtonValue(h.fake.sent[1]!.input), {
+      messageId: 'om_sent_2',
+    }))).toEqual({ toast: { type: 'info', content: '正在执行 /new' } })
     await vi.waitFor(() => { expect(h.agents.created).toHaveLength(2) })
     const next = h.agents.created[1]!
     expect(next.sessionId).not.toBe(first.sessionId)
@@ -600,10 +799,9 @@ describe('slash commands', () => {
     expect(first.dispose).toHaveBeenCalled()
     expect(workspaces.detached).toContain(first.sessionId)
     expect(await outcome).toBe('cancelled')
-    await vi.waitFor(() => { expect(h.fake.updated).toHaveLength(1) })
-    expect(JSON.stringify(h.fake.updated[0]!.card)).toContain('已撤回')
-    await vi.waitFor(() => { expect(h.fake.sent).toHaveLength(2) })
-    expect(JSON.stringify(h.fake.sent[1]!.input)).toContain('已新建空白会话')
+    await vi.waitFor(() => { expect(h.fake.updated).toHaveLength(2) })
+    expect(h.fake.updated.some(update => JSON.stringify(update.card).includes('已撤回'))).toBe(true)
+    expect(h.fake.updated.some(update => JSON.stringify(update.card).includes('已新建空白会话'))).toBe(true)
     expect(workspaces.sessionIds).toEqual([next.sessionId])
   })
 })
@@ -1007,6 +1205,23 @@ function selectorFrom(input: unknown): {
   const card = (input as { card: { elements: readonly { tag: string; actions?: readonly unknown[] }[] } }).card
   const action = card.elements.find(element => element.tag === 'action')?.actions?.[0]
   return action as { readonly value: unknown; readonly options: readonly { readonly value: string }[] }
+}
+
+/** Extract the first ordinary button callback from one command card. */
+function firstButtonValue(input: unknown): unknown {
+  const card = (input as { card: { elements: readonly { tag: string; actions?: readonly { value: unknown }[] }[] } }).card
+  return card.elements.find(element => element.tag === 'action')?.actions?.[0]?.value
+}
+
+/** Extract the submit button name from one CardKit command form. */
+function formSubmitName(input: unknown): string {
+  const card = (input as {
+    card: { elements: readonly { tag: string; elements?: readonly { tag: string; name?: string }[] }[] }
+  }).card
+  const name = card.elements.find(element => element.tag === 'form')?.elements
+    ?.find(element => element.tag === 'button')?.name
+  if (name === undefined) throw new Error('command form has no submit button')
+  return name
 }
 
 /** The card object one sent message carried. */

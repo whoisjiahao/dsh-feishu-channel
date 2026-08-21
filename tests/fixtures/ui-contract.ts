@@ -71,8 +71,41 @@ export const UI_CONTRACT = {
     help: {
       wide: true,
       status: "**命令中心**  <text_tag color='blue'>可用</text_tag>",
-      text: '/new  ·  新建会话\n/model  ·  查看或更换当前会话模型',
-      note: '在输入框键入 / 可随时打开飞书命令面板。',
+      placeholder: '选择命令',
+      options: ['/new · 新建会话', '/model · 查看或更换当前会话模型'],
+      note: '选择后将在当前卡片中打开对应操作。',
+    },
+    confirm: {
+      wide: true,
+      status: "**命令确认**  <text_tag color='orange'>待确认</text_tag>",
+      fields: [
+        { label: '**命令**', value: '/compact' },
+        { label: '**作用**', value: '压缩较早的会话历史' },
+      ],
+      actions: [
+        { label: '执行命令', type: 'primary', action: 'run' },
+        { label: '取消', type: 'default', action: 'cancel' },
+      ],
+    },
+    input: {
+      wide: true,
+      status: "**命令确认**  <text_tag color='orange'>待输入</text_tag>",
+      fields: [
+        { label: '**命令**', value: '/feedback' },
+        { label: '**作用**', value: '记录反馈' },
+      ],
+      placeholder: '<text>',
+      submit: '执行',
+    },
+  },
+  permission: {
+    picker: {
+      wide: true,
+      status: "**权限设置**  <text_tag color='blue'>请选择</text_tag>",
+      fields: [{ label: '**当前权限**', value: 'workspace-write' }],
+      placeholder: '选择权限预设',
+      options: ['Workspace write', 'Full access'],
+      note: '选择后将作用于当前会话；高风险权限需要再次确认。',
     },
   },
   model: {
