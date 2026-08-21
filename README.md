@@ -58,17 +58,45 @@ feishu-channel: 请用飞书扫码创建应用…
 
 ## 界面预览
 
-**回复卡片**：加载中实时步骤 → 结论优先正文（关键事实表格 + 默认收起的证据）→ 失败重试：
+以下均为真实飞书客户端截图，敏感路径已遮盖。
 
-![回复卡片](docs/preview/cards-reply.png)
+### 回复卡片
 
-**审批与命令卡片**：点按钮决策；命令可选择、输入或确认，结果在原卡片结算：
+结论优先呈现，支持表格、编号列表与默认收起的分析过程。
 
-![交互卡片](docs/preview/cards-interactive.png)
+<p align="center">
+  <img src="docs/preview/feishu-reply-completed.png" width="760" alt="飞书中的 DSH 完整回复卡片">
+</p>
 
-**平台原生面**：降级消息、斜杠命令面板、扫码注册入口：
+### 命令执行
 
-![平台原生面](docs/preview/cards-native.png)
+同一张卡片从处理中原地更新为完成态，并保留清晰、可核对的执行时间线。
+
+<table>
+  <tr>
+    <td width="50%" align="center"><strong>执行中</strong></td>
+    <td width="50%" align="center"><strong>已完成</strong></td>
+  </tr>
+  <tr>
+    <td valign="top"><img src="docs/preview/feishu-command-running.png" width="100%" alt="飞书命令执行中的卡片"></td>
+    <td valign="top"><img src="docs/preview/feishu-command-completed.png" width="100%" alt="飞书命令执行完成的卡片"></td>
+  </tr>
+</table>
+
+### 命令控制
+
+命令中心与会话设置均使用原生交互控件，无需记忆参数或离开聊天窗口。
+
+<table>
+  <tr>
+    <td width="50%" align="center"><strong>命令中心</strong></td>
+    <td width="50%" align="center"><strong>模型设置</strong></td>
+  </tr>
+  <tr>
+    <td valign="top"><img src="docs/preview/feishu-command-center.png" width="100%" alt="飞书中的 DSH 命令中心"></td>
+    <td valign="top"><img src="docs/preview/feishu-model-setting.png" width="100%" alt="飞书中的 DSH 模型设置卡片"></td>
+  </tr>
+</table>
 
 ## 常用配置
 
