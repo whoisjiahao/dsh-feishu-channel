@@ -445,7 +445,7 @@ describe('renderCard', () => {
     // Rows follow the requested field order; cost sits beside the token rows.
     const details = elementOf(parsed, 'head_details')
     const labels = (details?.columns?.[0]?.elements ?? []).map(element => element.text?.content ?? '')
-    expect(labels).toEqual(['模型', '输入 Token', '输出 Token', '费用', 'ctx'])
+    expect(labels).toEqual(['模型', '输入 Token', '输出 Token', '费用', '上下文用量'])
   })
 
   it('omits the cost row when pricing is absent or the model is unpriced', () => {
@@ -471,7 +471,7 @@ describe('renderCard', () => {
     expect(JSON.stringify(parsed)).not.toContain('费用')
   })
 
-  it('marks the cost row with 空闲 when the usage lands off-peak', () => {
+  it('marks the cost row with 低谷 when the usage lands off-peak', () => {
     const s = new TurnView(1)
     s.observe(event('assistant/message', {
       turn: 1,
@@ -487,7 +487,7 @@ describe('renderCard', () => {
       offPeakWindows: [{ start: '00:00', end: '12:00' }, { start: '12:00', end: '00:00' }],
     }).card)
     // 2M×1.5 + 1M×4.5 → half of the ¥15.00 peak price.
-    expect(textOf(parsed, 'head_cost')).toBe('¥7.50 ·空闲')
+    expect(textOf(parsed, 'head_cost')).toBe('¥7.50 ·低谷')
   })
 
   it('renders a failed card: red pill, tinted error box, and JSON 2.0 buttons', () => {

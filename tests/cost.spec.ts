@@ -114,17 +114,17 @@ describe('estimateCost off-peak rates', () => {
   const usage = { inputTokens: 1_000_000, outputTokens: 1_000_000 }
   const windows: TimeWindow[] = [{ start: '12:00', end: '14:00' }]
 
-  it('bills off-peak rates with the 空闲 marker inside the window', () => {
+  it('bills off-peak rates with the 低谷 marker inside the window', () => {
     expect(estimateCost(usage, PEAKED, 'deepseek-v4-flash', BEIJING('2026-01-15T04:30:00'), [windows[0]!]))
-      .toBe('¥6.00 ·空闲')
+      .toBe('¥6.00 ·低谷')
   })
 
-  it('bills standard rates outside the window, without the marker', () => {
+  it('bills standard rates with the 高峰 marker outside the window', () => {
     expect(estimateCost(usage, PEAKED, 'deepseek-v4-flash', BEIJING('2026-01-15T02:00:00'), [windows[0]!]))
-      .toBe('¥12.00')
+      .toBe('¥12.00 ·高峰')
   })
 
-  it('ignores off-peak rates when windows are disabled or absent', () => {
+  it('names no tier when windows are disabled or absent', () => {
     expect(estimateCost(usage, PEAKED, 'deepseek-v4-flash', BEIJING('2026-01-15T04:30:00'), [])).toBe('¥12.00')
     expect(estimateCost(usage, PEAKED, 'deepseek-v4-flash', BEIJING('2026-01-15T04:30:00'), undefined))
       .toBe('¥12.00')
@@ -144,7 +144,7 @@ describe('estimateCost off-peak rates', () => {
     expect(estimateCost(cachedUsage, CACHED, 'm', undefined, undefined)).toBe('¥12.60')
     // Off-peak halves every rate: 1×1.5 + 2×0.15 + 1×4.5 → ¥6.30
     expect(estimateCost(cachedUsage, CACHED, 'm', BEIJING('2026-01-15T04:30:00'), [{ start: '12:00', end: '14:00' }]))
-      .toBe('¥6.30 ·空闲')
+      .toBe('¥6.30 ·低谷')
   })
 
   it('bills unpriced cache hits at the miss rate instead of undercounting', () => {

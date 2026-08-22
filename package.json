@@ -1,7 +1,7 @@
 {
   "name": "dsh-feishu-channel",
   "description": "Feishu/Lark IM channel for DeepSeek Harness: chats drive agents, answers render as streaming rich cards, approvals settle by button clicks",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "type": "module",
   "packageManager": "pnpm@11.7.0",
   "engines": {

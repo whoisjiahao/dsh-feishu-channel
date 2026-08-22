@@ -653,7 +653,7 @@ function collectCardMeta(
       label: '费用',
       value: estimateCost(usage, pricing, view.model, view.usageAtMs ?? view.startedAt, offPeakWindows),
     },
-    { field: 'context', id: 'context', label: 'ctx', value: formatContext(inputTokens, view.contextWindow) },
+    { field: 'context', id: 'context', label: '上下文用量', value: formatContext(inputTokens, view.contextWindow) },
   ]
 
   const fields = requested.length === 0 ? DEFAULT_META_FIELDS : requested

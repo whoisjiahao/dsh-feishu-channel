@@ -7,16 +7,19 @@
 import type { ModelPricing, TimeWindow } from '../config.ts'
 import type { TurnTokenUsage } from './turn-view.ts'
 
-/** Suffix marking a row billed at the off-peak rates. */
-const OFF_PEAK_MARK = ' ·空闲'
+/** Tier suffixes naming the applied rate when the model is time-tiered. */
+const PEAK_MARK = ' ·高峰'
+const OFF_PEAK_MARK = ' ·低谷'
 
 /**
  * Render the 费用 disclosure-row value for one turn: reported usage times the
- * configured per-million-token prices of the turn's model. When the model has
- * `offPeak` rates and `atMs` falls inside one of the Beijing-time windows, the
- * discounted rates apply and the row gains an 空闲 marker. An empty string
- * means "no price covers this model" (or no usage yet), which the meta
- * renderer omits — an absent row, never a blank one.
+ * configured per-million-token prices of the turn's model. When the model
+ * declares `offPeak` rates and windows are active, the row names the applied
+ * tier — `·低谷` with the discounted rates inside the Beijing-time windows,
+ * `·高峰` with the standard rates outside them; a single-tier model (no
+ * offPeak rates, or windows disabled) bills one published price and names no
+ * tier. An empty string means "no price covers this model" (or no usage
+ * yet), which the meta renderer omits — an absent row, never a blank one.
  */
 export function estimateCost(
   usage: TurnTokenUsage | undefined,
@@ -27,10 +30,13 @@ export function estimateCost(
 ): string {
   const price = lookupPrice(pricing, model)
   if (usage === undefined || price === undefined) return ''
+  const currency = price.currency ?? '¥'
   const { offPeak: discount } = price
-  const discounted = discount !== undefined && atMs !== undefined && inOffPeak(atMs, windows)
-  return formatAmount(price.currency ?? '¥', amount(usage, discounted ? discount : price))
-    + (discounted ? OFF_PEAK_MARK : '')
+  const timeTiered = discount !== undefined && windows !== undefined && windows.length > 0
+  if (!timeTiered) return formatAmount(currency, amount(usage, price))
+  const offPeak = atMs !== undefined && inOffPeak(atMs, windows)
+  return formatAmount(currency, amount(usage, offPeak ? discount : price))
+    + (offPeak ? OFF_PEAK_MARK : PEAK_MARK)
 }
 
 /** Whether `atMs` falls inside any half-open Beijing-time window. */
