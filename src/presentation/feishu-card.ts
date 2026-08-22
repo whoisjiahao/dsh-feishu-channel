@@ -444,15 +444,26 @@ function timelineLines(
 }
 
 function timelineLine(step: TurnStep, options: CardRenderOptions, frame: number): string {
-  const timestamp = formatStepTime(step.atMs)
+  const timestamp = formatStepTime(step.startedAtMs)
+  const span = formatStepSpan(step)
   if (step.kind === 'reasoning') {
-    return timestamp + ' <font color="' + COLOR.reasoning + '">**思考**</font> · ' + step.status
+    // Status words stay Chinese; the raw enum never reaches the card.
+    const label = step.status === 'thinking' ? '思考中' : step.status === 'stopped' ? '思考 · 已停止' : '思考'
+    return timestamp + ' <font color="' + COLOR.reasoning + '">**' + label + '**</font>' + span
   }
 
   const indicator = toolIndicator(step.status, frame)
   const label = boundedToolLabel(step, options)
   return timestamp + ' <font color="' + indicator.color + '">' + indicator.glyph + '</font> **'
-    + escapeCardText(label) + '**'
+    + escapeCardText(label) + '**' + span
+}
+
+/** Rendered ` · Ns` duration for a settled step; in-flight steps span blank. */
+export function formatStepSpan(step: TurnStep): string {
+  if (step.endedAtMs === undefined) return ''
+  const seconds = Math.max(0, (step.endedAtMs - step.startedAtMs) / 1000)
+  const value = seconds < 10 ? seconds.toFixed(1).replace(/\.0$/, '') : String(Math.round(seconds))
+  return ' · ' + value + 's'
 }
 
 function toolIndicator(
@@ -462,6 +473,7 @@ function toolIndicator(
   const terminal = {
     completed: { glyph: '✓', color: COLOR.success },
     failed: { glyph: '✕', color: COLOR.failure },
+    stopped: { glyph: '⏹', color: COLOR.quiet },
   } as const
   return status === 'running'
     ? { glyph: spinnerFrame(frame), color: COLOR.active }
@@ -494,7 +506,7 @@ function visualWidth(value: string): number {
 }
 
 function composeAnalysisDisclosure(view: TurnView, options: CardRenderOptions): CardNode {
-  const ordered = [...view.steps].sort((left, right) => left.atMs - right.atMs)
+  const ordered = [...view.steps].sort((left, right) => left.startedAtMs - right.startedAtMs)
   const visible = ordered.slice(-options.maxTimelineItems)
   const hidden = ordered.length - visible.length
   const content: CardNode[] = []

@@ -13,17 +13,23 @@ export interface TurnTokenUsage {
     /** Disjoint cache-hit input portion, billed at the hit rate when priced. */
     readonly cacheReadTokens?: number;
 }
-/** One renderable process row. Raw reasoning and tool-result bodies are excluded. */
+/**
+ * One renderable process row. Raw reasoning and tool-result bodies are
+ * excluded. `startedAtMs` is preserved for the step's whole life — the span
+ * against `endedAtMs` is the per-step duration the timeline renders.
+ */
 export type TurnStep = {
     readonly kind: 'reasoning';
-    readonly status: 'completed';
-    readonly atMs: number;
+    status: 'thinking' | 'completed' | 'stopped';
+    readonly startedAtMs: number;
+    endedAtMs?: number;
 } | {
     readonly kind: 'tool';
     readonly name: string;
-    status: 'running' | 'completed' | 'failed';
     readonly argumentsJson: string;
-    atMs: number;
+    status: 'running' | 'completed' | 'failed' | 'stopped';
+    readonly startedAtMs: number;
+    endedAtMs?: number;
 };
 /** Context retained before a turn starts. */
 export interface InitialTurnContext {
@@ -61,6 +67,9 @@ export declare class TurnView {
     private markInProgress;
     private applyContext;
     private observeAssistantMessage;
+    /** Open the live 思考中 row, or keep the already-open one (replay-safe). */
+    private openOrKeepThinkingStep;
+    private completeOrAddReasoningStep;
     private observeToolCall;
     private observeToolResult;
     private finish;

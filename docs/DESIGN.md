@@ -115,7 +115,7 @@ DSH 运维者（安装/配置/扫码）                          <-> DSH 宿主�
 - 脱敏: 工具详情中的密钥键（token/secret/password/api-key 等）无论 JSON/Python 字面量/裸文本均替换为 [REDACTED]；模型提供的不信任文本用 plain_text 承载
 - 三态卡片（feishu-reply-card-kit mockup 的 JSON 映射）: 一张卡原地更新（patch）贯穿加载中/成功/失败；宽卡片（wide_screen_mode）；body 按状态渲染对应面板——加载面板（任务标题 + 实时步骤）、成功面板（答案 + 折叠分析过程）、失败面板（错误框 + 重试/复制错误按钮）
 - 顶栏（时间 + 耗时 + 状态胶囊 + 展开箭头）: body 首行为全宽原生 `collapsible_panel`；标题固定为「时间 · 耗时 · 状态」并使用 `notation` 字号，`header.width` 设置为 `fill`，因此箭头始终贴卡片最右侧且状态行保持单行。状态标题直接继承 card body 的左边界，与飞书原生引用文案对齐；手机端只截断、不换行。展开内容占满整卡宽度，按模型、输入 Token、输出 Token、费用、ctx（已用/上限 · 百分比）逐行展示，标签左对齐、数值右对齐且每行 `lines: 1`，不把整行做成按钮，也不依赖 callback 或进程内状态。费用行是纯换算（cost.ts）：单价表默认内置 DeepSeek 官方现行牌价（`DEFAULT_PRICING`，2026-08-17 峰谷方案，覆盖 v4-flash / v4-flash-vision-exp / v4-pro），部署按模型 id 整条覆盖合并；费用 = 未命中输入×`input` + 缓存命中×`cacheHitInput` + 输出×`output`（宿主 `inputTokens` 已扣除缓存命中，二者不相交；未配命中价时按未命中价计，宁高估不低估）。支持分时计价——模型条目声明 `offPeak` 折扣价且 usage 上报时刻（usageAtMs，计费时段锚点）落在 `offPeakWindows` 内时按折扣计并追加「·空闲」标记，窗口为北京时间 `HH:MM` 半开区间、跨午夜用 end 早于 start 表达，默认取 DeepSeek 官方峰谷表（高峰北京时间 9:00–12:00 与 14:00–18:00，空闲减半），`[]` 关闭；模型无匹配条目时该行整体缺席（空值行不渲染），宿主不提供金额。终态时间冻结为 turn/end 时刻，duration 不重复进入详情，其余终态字段由 footerFields 配置；一条信息只出现一次
-- 加载面板: turn/end 前不展示半截模型正文；标题固定为 spinner + **正在分析**，不重复原生引用栏已经展示的用户消息；工具步骤固定为 HH:MM:SS + ✓/✕/⠋ 彩色符号 + 一句话标题，到标题结束，不追加命令、工具结果、done/completed 或截断提示（标签优先 presentCall 人类描述，否则工具名；完成时间戳取工具结果到达时刻），超出 maxTimelineItems 折叠为一条灰行，末尾灰色"下一步 · 生成回复"；三条灰色 column_set 静态近似动画骨架
+- 加载面板: turn/end 前不展示半截模型正文；标题固定为 spinner + **正在分析**，不重复原生引用栏已经展示的用户消息；思考以「思考中」实时行呈现——首个 reasoning-delta 即出现（正文仍不保留），消息落地时合并为「思考」并标注真实耗时；工具步骤固定为 HH:MM:SS + ✓/✕/⠋ 彩色符号 + 一句话标题 + 真实耗时（`· Ns`，起止双时间戳、完成不覆盖开始），到标题结束，不追加命令、工具结果、done/completed 或截断提示（标签优先 presentCall 人类描述，否则工具名；完成时间戳取工具结果到达时刻），超出 maxTimelineItems 折叠为一条灰行，末尾灰色"下一步 · 生成回复"；三条灰色 column_set 静态近似动画骨架
 - 成功面板: 结论优先且不丢内容——显式「最终/核心/明确结论」章节提升为 16px 标题与首屏正文，原先的证据进入默认收起的「详细说明」；紧随标题的 `关键事实|值` 两列表格（2–4 行）保留在正文中，作为原生 markdown 表格原样渲染（左列字段名、右列内容，自动对齐、换行不截断；不使用 2×2 指标网格，避免错位与超长内容截断），其余 markdown 按结构块拆分为独立元素原样渲染（表格/清单/代码围栏各一元素）；卡片 body 的 vertical_spacing 固定 12px（`--space-4`），所有兄弟元素之间统一呼吸——表格与后续正文、标题与列表、「详细说明」折叠面板与上方内容一律 12px，不依赖模型输出结构；正文与分析区之间使用飞书原生 `hr` 硬分割线（不携带 margin，间距由 vertical_spacing 提供），避免不受消息接口支持的伪渐变。间距一律取自 `SPACE_*` 常量（design-system.md §3.5）。默认收起、无边框的标题固定为 `🔍 **分析过程**`，右侧保留 14px 原生展开箭头（timelineExpanded 可配置展开）；完成后将加载态已显示的同一条时间线原地冻结并收起，每个时间点仍为一行，仅展示思考状态或人类可读工具动作摘要，不展示原始 reasoning、工具输出或自动省略号；没有时间线条目时展开显示「本轮直接生成回复」。
 - 富卡片回答契约: channel scope 向 agent 注入一条最小格式提示——最终回复以 `##` 结论标题开头；有 2–4 条关键事实时紧跟 `关键事实|值` 表（渲染器保持该表为 markdown 表格，不转换为 2×2 网格）；首屏只放结论和下一步，支撑证据放在可选 `### 详细说明` 下；工具轨迹不在正文重复；跨标题延续的有序集合也必须保持连续编号且每项独占一行，禁止用 `·`、`、`、逗号、代码围栏或多栏纯文本压缩。有序清单若仍被模型放进纯文本代码围栏，渲染器仅在所有条目为连续编号的单词项时将其还原为普通 Markdown 列表，真实代码与非连续编号保持原样。渲染器仍接受任意 markdown，未遵守契约时保持内容完整。
 - 失败面板: 部分答案（如有）在上，hr 后为"分析失败：<原因截断>"标题 + 红色 column_set 错误框（错误码 + 消息 ≤240 字符 + 灰色 last attempt HH:MM:SS）+ 两个 JSON 2.0 原生 button（callback behavior，按钮组 `flex_mode: none`——真机实测手机端不执行 stretch 堆叠，锁定并排布局，见 design-system.md §5.5）：重试校验操作人后复用该失败卡 messageId，并重放该 chat 最近一条用户消息；复制错误因平台无剪贴板 API，点击以 toast 回显错误文本供手动复制
@@ -175,7 +175,7 @@ DSH 运维者（安装/配置/扫码）                          <-> DSH 宿主�
 | src/presentation/markdown.ts | CardComposer 内容结构 | 显式 prose/list/fence/table 扫描、卡片文本规范化、结构安全分块、表格溢出、流式 think 标签过滤 |
 | src/presentation/card-budget.ts | CardComposer 容量边界 | 单次 JSON 深度遍历统计 UTF-8 字节、元素与 Markdown/native table，并拒绝循环或不可序列化值 |
 | src/presentation/sensitive-text.ts | 内容安全 | 在截断前识别 JSON、键值文本、CLI 与 URL 中的 credential 字段并替换为 `[REDACTED]` |
-| src/presentation/turn-view.ts | TurnView | 最小可渲染状态投影、重复事件幂等与终态冻结；不保存 reasoning/tool result 正文 |
+| src/presentation/turn-view.ts | TurnView | 最小可渲染状态投影、重复事件幂等与终态冻结；步骤保留起止双时间戳（渲染真实耗时）、思考阶段合并为单行（thinking→completed）、turn/end 强制结算未完成步骤为 stopped；不保存 reasoning/tool result 正文 |
 | src/presentation/cost.ts | CardComposer 内容结构 | pricing 价格表 → 费用行值的纯换算：模型 id 精确匹配后回退路由末段、缓存命中/未命中拆分计价、货币符号、金额格式化、北京时间峰谷窗口判定（跨午夜）与「·空闲」标记；无匹配条目返回空串，由 meta 渲染整体省略该行 |
 | src/presentation/feishu-card.ts | CardComposer | 从 TurnView 纯函数组装三态卡片（全宽原生折叠顶栏 + head-meta/加载/成功/失败面板 + JSON 2.0 动作/status/spinner） |
 | src/presentation/reply-presenter.ts | ReplyPresenter | 单 turn 不可变目标、串行建卡/更新、终态 handoff、一次性原生降级与幂等关闭 |
@@ -191,7 +191,7 @@ DSH 运维者（安装/配置/扫码）                          <-> DSH 宿主�
 | 编号清单、纯文本 inventory fence、inline code 与表格溢出 compact/truncate | presentation-markdown.spec、feishu-card.spec、command-card.spec |
 | 限额巡检 200/5/28KB；复用 Markdown table 解析；循环、BigInt、function、symbol、NaN 与非普通对象拒绝 | card-budget.spec |
 | 脱敏 JSON/Python-like/CLI/URL/普通键值；避免近似词误报；结果严格限长 | sensitive-text.spec |
-| 回合投影: chunk→answer、reasoning/tool→最小步骤、turn/end→冻结终态、重复事件幂等、原始正文不驻留 | turn-view.spec |
+| 回合投影: chunk→answer、reasoning/tool→最小步骤（思考合并、起止双时间戳）、turn/end→冻结终态并结算未完成步骤为 stopped、重复事件幂等、原始正文不驻留 | turn-view.spec |
 | footer 字段选择/格式化/spinner、三态卡片与冻结 UI；费用换算与显隐（pricing 匹配/货币/金额格式） | feishu-card.spec、cost.spec、ui-contract.spec |
 | 建卡→节流更新→终态；失败仅降级一次；限额 handoff；回复目标不可变；close 清 timer | reply-presenter.spec、reply-presenter-transport.spec（可控 transport） |
 | 交互卡原语结构（状态行/字段行/纯文本承载） | card-design.spec |

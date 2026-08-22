@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { HostSessionEvent } from '../src/host.ts'
 import { TurnView } from '../src/presentation/turn-view.ts'
 
@@ -107,13 +107,14 @@ describe('TurnView', () => {
     }))
 
     expect(view.steps).toEqual([
-      { kind: 'reasoning', status: 'completed', atMs: expect.any(Number) },
+      { kind: 'reasoning', status: 'completed', startedAtMs: expect.any(Number), endedAtMs: expect.any(Number) },
       {
         kind: 'tool',
         name: 'bash',
         status: 'completed',
         argumentsJson: '{"command":"pwd"}',
-        atMs: expect.any(Number),
+        startedAtMs: expect.any(Number),
+        endedAtMs: expect.any(Number),
       },
     ])
     expect(JSON.stringify(view)).not.toContain('private chain of thought')
@@ -151,12 +152,100 @@ describe('TurnView', () => {
     view.observe(call)
     view.observe(call)
     view.observe(result)
-    const settledAt = view.steps[1]?.atMs
+    const startedAt = view.steps[1]?.startedAtMs
+    const endedAt = view.steps[1]?.endedAtMs
     view.observe(result)
 
     expect(view.answerText).toBe('answer')
     expect(view.steps).toHaveLength(2)
-    expect(view.steps[1]).toMatchObject({ kind: 'tool', status: 'completed', atMs: settledAt })
+    // Duplicate result is idempotent AND the start instant survives completion.
+    expect(view.steps[1]).toMatchObject({
+      kind: 'tool',
+      status: 'completed',
+      startedAtMs: startedAt,
+      endedAtMs: endedAt,
+    })
+  })
+
+  it('keeps the tool start instant and records the real duration', () => {
+    vi.useFakeTimers()
+    try {
+      const view = new TurnView(1)
+      vi.setSystemTime(new Date(2024, 0, 2, 10, 0, 0))
+      view.observe(event('tool/call', { turn: 1, callId: 'c1', name: 'bash', arguments: '{}' }))
+      vi.setSystemTime(new Date(2024, 0, 2, 10, 0, 2, 300))
+      view.observe(event('tool/result', {
+        turn: 1,
+        message: { content: [{ type: 'text', toolCallId: 'c1', content: [{ type: 'text', text: 'ok' }] }] },
+      }))
+
+      expect(view.steps[0]).toEqual({
+        kind: 'tool',
+        name: 'bash',
+        status: 'completed',
+        argumentsJson: '{}',
+        startedAtMs: new Date(2024, 0, 2, 10, 0, 0).getTime(),
+        endedAtMs: new Date(2024, 0, 2, 10, 0, 2, 300).getTime(),
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('opens 思考中 on the first reasoning delta and merges it on completion', () => {
+    vi.useFakeTimers()
+    try {
+      const view = new TurnView(1)
+      vi.setSystemTime(new Date(2024, 0, 2, 10, 0, 0))
+      view.observe(event('assistant/chunk', { turn: 1, chunk: { type: 'reasoning-delta' } }))
+      vi.setSystemTime(new Date(2024, 0, 2, 10, 0, 1))
+      view.observe(event('assistant/chunk', { turn: 1, chunk: { type: 'reasoning-delta' } }))
+      expect(view.steps).toEqual([
+        { kind: 'reasoning', status: 'thinking', startedAtMs: new Date(2024, 0, 2, 10, 0, 0).getTime() },
+      ])
+
+      vi.setSystemTime(new Date(2024, 0, 2, 10, 0, 3))
+      // Two reasoning blocks in one message still merge into the same row.
+      view.observe(event('assistant/message', {
+        turn: 1,
+        step: 1,
+        message: {
+          content: [
+            { type: 'reasoning', text: 'block one' },
+            { type: 'reasoning', text: 'block two' },
+          ],
+        },
+      }))
+
+      expect(view.steps).toEqual([
+        {
+          kind: 'reasoning',
+          status: 'completed',
+          startedAtMs: new Date(2024, 0, 2, 10, 0, 0).getTime(),
+          endedAtMs: new Date(2024, 0, 2, 10, 0, 3).getTime(),
+        },
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('settles in-flight steps as stopped when the turn ends early', () => {
+    vi.useFakeTimers()
+    try {
+      const view = new TurnView(1)
+      view.observe(event('assistant/chunk', { turn: 1, chunk: { type: 'reasoning-delta' } }))
+      view.observe(event('tool/call', { turn: 1, callId: 'c1', name: 'bash', arguments: '{}' }))
+      view.observe(event('turn/end', { turn: 1, reason: { kind: 'error', error: { code: 'X', message: 'boom' } } }))
+
+      expect(view.status).toBe('failed')
+      expect(view.steps.map(step => step.status)).toEqual(['stopped', 'stopped'])
+      for (const step of view.steps) {
+        expect(step.endedAtMs).toEqual(expect.any(Number))
+      }
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('ignores events from other turns', () => {

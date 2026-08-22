@@ -3,7 +3,7 @@
 <p align="center"><strong>把飞书变成 DSH 的遥控器</strong> —— 双向对话、流式富卡片、一键审批、扫码即用。</p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.6.3-1f6feb?style=flat" alt="version">
+  <img src="https://img.shields.io/badge/version-0.7.0-1f6feb?style=flat" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-3fb950?style=flat" alt="license">
   <img src="https://img.shields.io/badge/DSH-bundle%20plugin-6e40c9?style=flat" alt="DSH bundle plugin">
   <a href="https://github.com/whoisjiahao/dsh-feishu-channel/actions/workflows/gates.yml"><img src="https://github.com/whoisjiahao/dsh-feishu-channel/actions/workflows/gates.yml/badge.svg" alt="gates"></a>
@@ -30,7 +30,7 @@
 **① 安装**（装进你的 web profile）：
 
 ```sh
-dsh plugin --profile web add github:whoisjiahao/dsh-feishu-channel#v0.6.3
+dsh plugin --profile web add github:whoisjiahao/dsh-feishu-channel#v0.7.0
 ```
 
 **② 重启 dsh web**，启动日志出现二维码：

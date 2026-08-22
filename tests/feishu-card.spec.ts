@@ -390,7 +390,7 @@ describe('renderCard', () => {
     }))
     const steps = contentOf(parse(renderCard(s, options).card), 'live_steps')
     expect(steps).toMatch(
-      /^\d{2}:\d{2}:\d{2} <font color="green">✓<\/font> \*\*Call Feishu token and command APIs via node\*\*$/m,
+      /^\d{2}:\d{2}:\d{2} <font color="green">✓<\/font> \*\*Call Feishu token and command APIs via node\*\*(?: · \d+(?:\.\d+)?s)?$/m,
     )
     expect(steps).not.toContain('settings.yaml')
     expect(steps).not.toContain('token 接口')
@@ -550,42 +550,50 @@ describe('renderCard', () => {
     expect(contentOf(folded, 'timeline_folded')).toContain('已折叠 3 条')
   })
 
-  it('freezes the same process rows in timestamp order without raw content', () => {
-    const s = new TurnView(1)
-    s.observe(event('tool/call', { turn: 1, callId: 'c1', name: 'later', arguments: '{}' }))
-    s.observe(event('tool/result', {
-      turn: 1,
-      message: { content: [{ type: 'text', toolCallId: 'c1', content: [{ type: 'text', text: '后执行\n' + '详情'.repeat(100) }] }] },
-    }))
-    s.observe(event('tool/call', { turn: 1, callId: 'c2', name: 'earlier', arguments: '{}' }))
-    s.observe(event('tool/result', {
-      turn: 1,
-      message: { content: [{ type: 'text', toolCallId: 'c2', content: [{ type: 'text', text: '先执行' }] }] },
+  it('freezes the same process rows in start-time order without raw content', () => {
+    vi.useFakeTimers()
+    try {
+      const s = new TurnView(1)
+      vi.setSystemTime(new Date(2024, 0, 2, 15, 37, 0))
+      s.observe(event('tool/call', { turn: 1, callId: 'c1', name: 'later', arguments: '{}' }))
+      s.observe(event('tool/result', {
+        turn: 1,
+        message: { content: [{ type: 'text', toolCallId: 'c1', content: [{ type: 'text', text: '后执行\n' + '详情'.repeat(100) }] }] },
       }))
-    s.observe(event('assistant/message', {
-      turn: 1,
-      step: 3,
-      message: { content: [{ type: 'reasoning', text: 'The user asked me to expose a very long internal reasoning trace.' }] },
-    }))
-    for (const entry of s.steps) {
-      if (entry.kind !== 'tool') continue
-      entry.atMs = new Date(2024, 0, 2, entry.name === 'earlier' ? 14 : 15, 37).getTime()
-    }
-    s.observe(event('turn/end', { turn: 1, reason: { kind: 'completed' } }))
+      vi.setSystemTime(new Date(2024, 0, 2, 14, 37, 0))
+      s.observe(event('tool/call', { turn: 1, callId: 'c2', name: 'earlier', arguments: '{}' }))
+      s.observe(event('tool/result', {
+        turn: 1,
+        message: { content: [{ type: 'text', toolCallId: 'c2', content: [{ type: 'text', text: '先执行' }] }] },
+      }))
+      vi.setSystemTime(new Date(2024, 0, 2, 16, 37, 0))
+      s.observe(event('assistant/message', {
+        turn: 1,
+        step: 3,
+        message: { content: [{ type: 'reasoning', text: 'The user asked me to expose a very long internal reasoning trace.' }] },
+      }))
+      s.observe(event('turn/end', { turn: 1, reason: { kind: 'completed' } }))
 
-    const parsed = parse(renderCard(s, options).card)
-    expect(elementOf(parsed, 'analysis_timeline')?.header?.title?.content)
-      .toBe('🔍 **分析过程**')
-    const rows = contentOf(parsed, 'timeline_steps').split('\n').filter(Boolean)
-    expect(rows).toHaveLength(3)
-    expect(rows[0]).toContain('14:37:00')
-    expect(rows[0]).toContain('earlier')
-    expect(rows[1]).toContain('15:37:00')
-    expect(rows[1]).toContain('later')
-    expect(rows[2]).toContain('思考')
-    expect(rows.join('\n')).not.toContain('详情')
-    expect(rows.join('\n')).not.toContain('The user')
-    expect(rows.join('\n')).not.toContain('…')
+      const parsed = parse(renderCard(s, options).card)
+      expect(elementOf(parsed, 'analysis_timeline')?.header?.title?.content)
+        .toBe('🔍 **分析过程**')
+      const rows = contentOf(parsed, 'timeline_steps').split('\n').filter(Boolean)
+      expect(rows).toHaveLength(3)
+      // Frozen rows sort by step START time, whatever the completion order was.
+      expect(rows[0]).toContain('14:37:00')
+      expect(rows[0]).toContain('earlier')
+      expect(rows[1]).toContain('15:37:00')
+      expect(rows[1]).toContain('later')
+      expect(rows[2]).toContain('思考')
+      // Durations render; the raw status enum never does.
+      expect(rows[0]).toContain('· 0s')
+      expect(rows.join('\n')).not.toContain('completed')
+      expect(rows.join('\n')).not.toContain('详情')
+      expect(rows.join('\n')).not.toContain('The user')
+      expect(rows.join('\n')).not.toContain('…')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('keeps the analysis toggle when the turn has reasoning but no tools', () => {
@@ -802,7 +810,7 @@ describe('tool transcript', () => {
     s.observe(event('turn/end', { turn: 1, reason: { kind: 'completed' } }))
     const parsed = parse(renderCard(s, options).card)
     expect(JSON.stringify(parsed)).not.toContain('y'.repeat(40))
-    expect(contentOf(parsed, 'timeline_steps')).toMatch(/^\d{2}:\d{2}:\d{2} .*\*\*bash\*\*$/)
+    expect(contentOf(parsed, 'timeline_steps')).toMatch(/^\d{2}:\d{2}:\d{2} .*\*\*bash\*\*(?: · \d+(?:\.\d+)?s)?$/)
   })
 })
 

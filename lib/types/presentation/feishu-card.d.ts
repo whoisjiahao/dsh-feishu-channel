@@ -1,6 +1,6 @@
 /** Compose the frozen Feishu reply-card UI from one transport-free turn view. */
 import type { ModelPricing, TimeWindow } from '../config.ts';
-import type { TurnView } from './turn-view.ts';
+import type { TurnStep, TurnView } from './turn-view.ts';
 import { type CardBudgetInspection } from './card-budget.ts';
 /** Card-button payload marking this plugin's retry action. */
 export declare const RETRY_ACTION = "dsh-feishu-channel/retry";
@@ -51,6 +51,8 @@ export declare function formatClock(elapsedMs: number): string;
 export declare function formatWallClock(ms: number): string;
 /** Format a local wall-clock time with seconds for timeline rows. */
 export declare function formatStepTime(ms: number): string;
+/** Rendered ` · Ns` duration for a settled step; in-flight steps span blank. */
+export declare function formatStepSpan(step: TurnStep): string;
 /** Render seconds as a compact h/m/s duration. */
 export declare function formatDuration(seconds: number): string;
 /** Format a token count with compact decimal suffixes. */
