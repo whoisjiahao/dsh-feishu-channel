@@ -10,6 +10,8 @@
 </p>
 
 > Feishu/Lark IM channel for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)：在飞书聊天里直接驱动你的 DSH agent——每个私聊、群聊或话题都有自己的 agent，回复以流式富卡片回到飞书，工具权限问题变成按钮决策。
+>
+> **English** — Turn Feishu/Lark into a remote control for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): every chat (direct / group / topic) drives its own DSH agent, replies stream back as rich cards with live progress, tool approvals become one-tap buttons, images pass through whenever the bound model supports vision, and every turn reports its token **cost** with DeepSeek peak/off-peak pricing. Install in one command — see [快速开始](#快速开始).
 
 ---
 
