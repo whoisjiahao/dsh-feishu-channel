@@ -3,7 +3,7 @@
 <p align="center"><strong>把飞书变成 DSH 的遥控器</strong> —— 双向对话、流式富卡片、一键审批、扫码即用。</p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.7.1-1f6feb?style=flat" alt="version">
+  <img src="https://img.shields.io/badge/version-0.7.2-1f6feb?style=flat" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-3fb950?style=flat" alt="license">
   <img src="https://img.shields.io/badge/DSH-bundle%20plugin-6e40c9?style=flat" alt="DSH bundle plugin">
   <a href="https://github.com/whoisjiahao/dsh-feishu-channel/actions/workflows/gates.yml"><img src="https://github.com/whoisjiahao/dsh-feishu-channel/actions/workflows/gates.yml/badge.svg" alt="gates"></a>
@@ -27,10 +27,17 @@
 
 ## 快速开始
 
-**① 安装**（装进你的 web profile）：
+**① 安装**（三选一，装进你的 web profile；命令即转发 pnpm，在 `~/.dsh/profiles/web` 内执行）：
 
 ```sh
-dsh plugin --profile web add github:whoisjiahao/dsh-feishu-channel#v0.7.1
+# 已发布版本（需要对应 tag 已推送到 GitHub）
+dsh plugin --profile web add github:whoisjiahao/dsh-feishu-channel#v0.7.2
+
+# 或：从 GitHub Releases 下载 tgz 后本地安装（无需网络解析 git 引用）
+dsh plugin --profile web add ~/Downloads/dsh-feishu-channel-0.7.2.tgz
+
+# 或：开发模式——链接本仓库，pnpm build 后热重载即可见
+dsh plugin --profile web add file:/绝对路径/dsh-feishu-channel
 ```
 
 **② 重启 dsh web**，启动日志出现二维码：
@@ -55,6 +62,53 @@ feishu-channel: 请用飞书扫码创建应用…
 > ```
 >
 > 或用环境变量管理凭据：运行 `node scripts/register-lark-app.mjs` 走官方扫码注册，把产出的 `FEISHU_APP_ID / FEISHU_APP_SECRET` 填入 patch 的 `appId: !!js process.env.FEISHU_APP_ID`（`!!js`，不是 `!js`）。
+
+> 🤖 你是 AI agent？跳到 [Agent 安装指引](#agent-安装指引机器可执行)——每步带命令与完成标志，可直接执行。
+
+## Agent 安装指引（机器可执行）
+
+目标读者：AI agent 与自动化脚本。按序执行，每步给出完成标志；任一步失败即停，不要自行变通。以下 `$PROFILE` 默认 `web`。
+
+**步骤 0 · 前置检查**
+
+```sh
+node -v   # 必须满足 ^22.19.0 || >=24.0.0
+test -f ~/.dsh/profiles/$PROFILE/package.json && echo profile-ok
+```
+
+**步骤 1 · 安装包体（二选一）**
+
+```sh
+# A. 发布版（要求 GitHub 存在 v0.7.1 tag；未发布则用 B）
+dsh plugin --profile $PROFILE add github:whoisjiahao/dsh-feishu-channel#v0.7.2
+# B. 本地 tgz（从 Releases 资产下载，或仓库内 pnpm pack 产出）
+dsh plugin --profile $PROFILE add /绝对路径/dsh-feishu-channel-0.7.2.tgz
+```
+
+完成标志：`~/.dsh/profiles/$PROFILE/package.json` 的 `dependencies` 出现 `"dsh-feishu-channel"`。
+
+**步骤 2 · 装配确认（三处，缺一不可）**
+
+1. `package.json` → `dsh.profile.bundles` 数组包含 `"dsh-feishu-channel"`（没有就手动加一行）；
+2. 凭据二选一：`~/.dsh/settings.yaml` 的 `feishu-channel:` 段（`appId`/`appSecret`），或 profile `cordis.patch.yml` 的 `insert` 行（模板见上文快速开始）；两者都缺 → 首次启动进入扫码流程，也算合法路径；
+3. `node -e "console.log(require('$HOME/.dsh/profiles/$PROFILE/node_modules/dsh-feishu-channel/package.json').version)"` 输出预期版本。
+
+**步骤 3 · 重启并验证**
+
+重启 dsh web 后，日志必须出现授权声明行：
+
+```
+feishu-channel: direct messages: anyone the app is visible to (narrow with senderAllowlist); groups: ...
+```
+
+冒烟测试：在飞书向机器人发送任意消息 → 收到流式卡片（加载 → 完成/失败三态之一）即成功。
+
+**回滚**
+
+```sh
+dsh plugin --profile $PROFILE remove dsh-feishu-channel
+# 并从 package.json 的 dsh.profile.bundles 数组移除 "dsh-feishu-channel"，然后重启。
+```
 
 ## 界面预览
 
