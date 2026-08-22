@@ -54,6 +54,18 @@ describe('resolveConfig', () => {
     expect(resolved.pricing['deepseek-v4-pro']).toBeDefined()
   })
 
+  it('seeds off-peak windows through schema validation (the loader path)', () => {
+    // Regression: schema validation materializes missing keys as [] / {},
+    // which used to disable off-peak billing entirely while pricing kept its
+    // defaults via the resolveConfig merge. The loader path is
+    // validate-then-resolve, so assert both stages.
+    const validated = ConfigSchema({ appId: 'cli_x', appSecret: 's' })
+    expect(validated.pricing).toEqual({})
+    expect(validated.offPeakWindows).toEqual(DEFAULT_OFF_PEAK_WINDOWS.map(window => ({ ...window })))
+    expect(resolveConfig(validated).pricing).toEqual(structuredClone(DEFAULT_PRICING))
+    expect(resolveConfig(validated).offPeakWindows).toEqual(DEFAULT_OFF_PEAK_WINDOWS.map(window => ({ ...window })))
+  })
+
   it('rejects malformed off-peak window bounds', () => {
     for (const bad of ['9点', '24:00', '12:60', 'noon', '']) {
       const config = { offPeakWindows: [{ start: bad!, end: '06:00' }] } as unknown as Config

@@ -219,10 +219,13 @@ export const Config: z<Config> = z.object({
       output: z.number(),
     }),
   })),
+  // Schema-level default: loader validation materializes missing keys as [],
+  // and an empty array means "off-peak disabled" — without this default the
+  // published schedule could never reach the runtime (measured in 0.6.2).
   offPeakWindows: z.array(z.object({
     start: z.string(),
     end: z.string(),
-  })),
+  })).default(DEFAULT_OFF_PEAK_WINDOWS.map(window => ({ ...window }))),
   maxTimelineItems: z.number(),
   tableOverflowMode: z.union(['compact', 'truncate'] as const),
 })
@@ -273,7 +276,8 @@ function seededPricing(explicit: Record<string, ModelPricing> | undefined): Reco
  * bound must be a 24-hour `HH:MM`. An explicit `[]` disables off-peak billing.
  */
 function resolveOffPeakWindows(windows: TimeWindow[] | undefined): TimeWindow[] {
-  const resolved = windows ?? [...DEFAULT_OFF_PEAK_WINDOWS.map(window => ({ ...window }))]
+  // Copy defensively: the schema default is a shared module-level literal.
+  const resolved = (windows ?? DEFAULT_OFF_PEAK_WINDOWS).map(window => ({ ...window }))
   for (const window of resolved) {
     for (const bound of [window.start, window.end]) {
       if (parseClock(bound) === undefined) {
