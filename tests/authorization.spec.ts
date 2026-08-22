@@ -6,7 +6,6 @@ const base: ResolvedConfig = {
   cwd: defaultChatWorkspaceDir(),
   sessionScope: 'chat',
   showProcess: true,
-  attachImages: false,
   syncSlashCommands: true,
   denyTools: [],
   requireMention: true,

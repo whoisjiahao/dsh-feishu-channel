@@ -28,13 +28,15 @@ export async function collectImages(
   attachments: HostAttachments | undefined,
   enabled: boolean,
   signal?: AbortSignal,
+  disabledNote?: string,
 ): Promise<CollectedImages> {
   const images = message.resources.filter(
     (resource: ResourceDescriptor) => resource.type === 'image',
   )
   if (images.length === 0) return emptyCollection()
   if (!enabled) {
-    return noteOnly('（用户发送了 ' + images.length + ' 张图片，本渠道未向模型传递图片：attachImages 未开启，可在部署配置中开启后重发）')
+    return noteOnly(disabledNote
+      ?? '（用户发送了 ' + images.length + ' 张图片，当前模型不支持图片输入，未传递图片）')
   }
   if (attachments === undefined) {
     return noteOnly('（用户发送了 ' + images.length + ' 张图片，但本部署没有组合附件存储，模型看不到它们）')
@@ -132,10 +134,10 @@ function isAborted(signal: AbortSignal | undefined): boolean {
   return signal?.aborted === true
 }
 
-function emptyCollection(): CollectedImages {
+export function emptyCollection(): CollectedImages {
   return { blocks: [], notes: [] }
 }
 
-function noteOnly(note: string): CollectedImages {
+export function noteOnly(note: string): CollectedImages {
   return { blocks: [], notes: [note] }
 }

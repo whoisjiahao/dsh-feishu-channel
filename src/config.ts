@@ -131,7 +131,6 @@ export interface Config {
   /** Show what the agent did on its way to an answer. */
   showProcess?: boolean
   /** Pass images a chat sends on to the model. Off by default. */
-  attachImages?: boolean
   /** Register this channel's commands on the bot's slash panel. */
   syncSlashCommands?: boolean
   /** Tools chat agents may not call, denied per agent at execution. */
@@ -177,7 +176,6 @@ export interface ResolvedConfig {
   preset?: string | undefined
   sessionScope: SessionScope
   showProcess: boolean
-  attachImages: boolean
   syncSlashCommands: boolean
   denyTools: string[]
   requireMention: boolean
@@ -202,7 +200,6 @@ export const Config: z<Config> = z.object({
   preset: z.string(),
   sessionScope: z.union(['chat', 'chat-thread', 'chat-sender'] as const).default('chat'),
   showProcess: z.boolean().default(true),
-  attachImages: z.boolean().default(false),
   syncSlashCommands: z.boolean().default(true),
   denyTools: z.array(String).default([...DEFAULT_DENY_TOOLS]),
   requireMention: z.boolean().default(true),
@@ -242,7 +239,6 @@ export function resolveConfig(config: Config): ResolvedConfig {
     preset: config.preset,
     sessionScope: config.sessionScope ?? 'chat',
     showProcess: config.showProcess ?? true,
-    attachImages: config.attachImages ?? false,
     syncSlashCommands: config.syncSlashCommands ?? true,
     denyTools: config.denyTools ?? [...DEFAULT_DENY_TOOLS],
     requireMention: config.requireMention ?? true,

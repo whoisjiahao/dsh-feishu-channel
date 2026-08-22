@@ -144,7 +144,7 @@ DSH 运维者（安装/配置/扫码）                          <-> DSH 宿主�
 - 配置 schema: @deepseek-ai/schemastery（同宿主）
 - 构建: tsc（lib/types 声明）+ tsdown（lib/index.js、lib/invariant.js），lib/ 提交进 git（GitHub 安装免构建）
 - 包边界: exports 仅 "." 与 "./invariant"（+ ./package.json）；不暴露 ./src/*——源码树仅作调试随包分发，不经导出面可达
-- 配置字段: appId/appSecret/domain/cwd/provider/model/preset/sessionScope/showProcess/attachImages/syncSlashCommands/denyTools/requireMention/senderAllowlist/groupAllowlist/approvers + 渲染参数（footerFields = head-meta 字段选择/maxTimelineItems/tableOverflowMode）
+- 配置字段: appId/appSecret/domain/cwd/provider/model/preset/sessionScope/showProcess/syncSlashCommands/denyTools/requireMention/senderAllowlist/groupAllowlist/approvers + 渲染参数（footerFields = head-meta 字段选择/maxTimelineItems/tableOverflowMode）
 - 凭据路径: 入口配置 → settings 命名空间（优先，可扫码持久化）→ QR 建应用
 - 常量（固定安全不变量，不配置化）: FEISHU_MAX_ELEMENTS=200、FEISHU_MAX_TABLES=5、SAFE_CARD_JSON_BYTES=28000、MAIN_CONTENT_CHUNK_CHARS=2400、CARD_ARGUMENTS_MAX_CHARS=600
 
@@ -164,7 +164,7 @@ DSH 运维者（安装/配置/扫码）                          <-> DSH 宿主�
 | src/authorization.ts | InboundGate 规则 | refuseMessage/refuseApprovalClick/describeAuthorization 纯函数 |
 | src/commands.ts | 命令面 | 完整行语法解析与无副作用分类；/new /reset /stop /help、模型/推理强度、宿主命令执行和结果归类 |
 | src/onboarding.ts | ChannelTransport 流程 | 可取消的 QR 注册状态循环、过期码最小重发间隔、凭据持久化结果与卸载后副作用封锁 |
-| src/images.ts | ChannelTransport 能力子模块 | 图片流式落临时文件，先按传输计数与磁盘 stat 校验媒体类型/单图/消息预算，再读取合格文件入库；取消及全部出口清理临时文件 |
+| src/images.ts | ChannelTransport 能力子模块 | 图片准入按会话当前模型 inputModalities 判定（与 web 发送路径同语义：已知缺 image 拒绝并提示 /model，未知放行由路由裁决）；流式落临时文件，先按传输计数与磁盘 stat 校验媒体类型/单图/消息预算，再读取合格文件入库；取消及全部出口清理临时文件 |
 | src/slash-panel.ts | ChannelTransport 能力子模块 | 分页读取应用命令后执行稳定去重的增删差集；removeUnknown 策略、权限降级与生命周期取消 |
 | src/model-catalog.ts | 非概念助手 | HostModelDirectory 解析（route/catalog/currentModel），命令面与模型设置卡共用 |
 | src/card-tokens.ts | CardComposer 设计令牌 | 语义色映射（CARD_COLOR/CardTone/toneColor）与间距刻度（SPACE_2..6）——design-system.md 的代码层单一事实源 |
@@ -200,7 +200,7 @@ DSH 运维者（安装/配置/扫码）                          <-> DSH 宿主�
 | 命令选择/输入/确认/取消/结果卡组装 | command-card.spec、ui-contract.spec |
 | 权限选项只取宿主投影、custom 不可写、full access 二次确认与结算卡 | permission-card.spec、plugin.spec |
 | 模型设置卡选项/结算卡/失败卡；选项与命令面同源（model-catalog） | model-card.spec |
-| 图片流式落盘、读前限额、存储/取消出口清理与用户失败笔记 | images.spec、plugin.spec |
+| 图片按模型能力准入（已知缺 image 拒绝/未知放行）、流式落盘、读前限额、存储/取消出口清理与用户失败笔记 | images.spec、plugin.spec |
 | Onboarding 保存结果、过期码节流、卸载后无副作用且不输出 secret | onboarding.spec、plugin.spec |
 | 面板分页 reconcile: 增/删/去重/removeUnknown/失败降级/生命周期取消 | slash-panel.spec、plugin.spec |
 | 边界承诺组合测试（经 apply 挂载可控 transport 与 host 测试替身）: 当前 generation 建/续、外部 live agent 隔离、消息 Promise、不可变回复目标、授权、命令、审批、富卡片、图片、面板、卸载与扫码 | plugin.spec、harness.ts |

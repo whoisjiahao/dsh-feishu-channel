@@ -3,7 +3,7 @@
 <p align="center"><strong>把飞书变成 DSH 的遥控器</strong> —— 双向对话、流式富卡片、一键审批、扫码即用。</p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.7.3-1f6feb?style=flat" alt="version">
+  <img src="https://img.shields.io/badge/version-0.8.0-1f6feb?style=flat" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-3fb950?style=flat" alt="license">
   <img src="https://img.shields.io/badge/DSH-bundle%20plugin-6e40c9?style=flat" alt="DSH bundle plugin">
   <a href="https://github.com/whoisjiahao/dsh-feishu-channel/actions/workflows/gates.yml"><img src="https://github.com/whoisjiahao/dsh-feishu-channel/actions/workflows/gates.yml/badge.svg" alt="gates"></a>
@@ -33,10 +33,10 @@
 
 ```sh
 # 已发布版本（需要对应 tag 已推送到 GitHub）
-dsh plugin --profile web add github:whoisjiahao/dsh-feishu-channel#v0.7.3
+dsh plugin --profile web add github:whoisjiahao/dsh-feishu-channel#v0.8.0
 
 # 或：从 GitHub Releases 下载 tgz 后本地安装（无需网络解析 git 引用）
-dsh plugin --profile web add ~/Downloads/dsh-feishu-channel-0.7.3.tgz
+dsh plugin --profile web add ~/Downloads/dsh-feishu-channel-0.8.0.tgz
 
 # 或：开发模式——链接本仓库，pnpm build 后热重载即可见
 dsh plugin --profile web add file:/绝对路径/dsh-feishu-channel
@@ -82,9 +82,9 @@ test -f ~/.dsh/profiles/$PROFILE/package.json && echo profile-ok
 
 ```sh
 # A. 发布版（要求 GitHub 存在 v0.7.1 tag；未发布则用 B）
-dsh plugin --profile $PROFILE add github:whoisjiahao/dsh-feishu-channel#v0.7.3
+dsh plugin --profile $PROFILE add github:whoisjiahao/dsh-feishu-channel#v0.8.0
 # B. 本地 tgz（从 Releases 资产下载，或仓库内 pnpm pack 产出）
-dsh plugin --profile $PROFILE add /绝对路径/dsh-feishu-channel-0.7.3.tgz
+dsh plugin --profile $PROFILE add /绝对路径/dsh-feishu-channel-0.8.0.tgz
 ```
 
 完成标志：`~/.dsh/profiles/$PROFILE/package.json` 的 `dependencies` 出现 `"dsh-feishu-channel"`。
@@ -175,7 +175,6 @@ dsh plugin --profile $PROFILE remove dsh-feishu-channel
 | cwd | `~/.dsh-feishu` | agent 会话工作目录；不存在时自动创建 |
 | preset | 宿主默认 | 聊天 agent 加入的 preset |
 | showProcess | true | 是否展示加载进度与完成态工具动作时间线（不展示原始 reasoning） |
-| attachImages | false | 是否把聊天图片传给模型（视觉路由才开） |
 | syncSlashCommands | true | 同步命令到飞书斜杠面板 |
 | denyTools | ask_user_question, exit_plan_mode | 聊天 agent 禁用的工具（答案无法到达聊天的工具） |
 | footerFields | 见源码 | 终态卡片展开详情字段（model/input/output tokens/cost/context） |
@@ -229,7 +228,7 @@ pnpm build        # tsc + tsdown，lib/ 提交进 git
 - 配置只在启动时读取一次（patch 层与 settings 层都生效，后者优先），修改需重启
 - chat agent 存活到插件卸载，无空闲驱逐
 - 停机期间到达的消息不会重放（transport 无游标）
-- 文件和音频以 SDK 标准化文本透传给模型；图片默认**不**透传——这是隐私与成本的保守默认（聊天图片会原样进入模型上下文并显著增加 token，且非视觉路由会报错），不是技术限制：视觉模型部署把 `attachImages` 设为 `true` 即可透传，未开启时机器人会明确告知用户图片未被传递
+- 图片按**当前模型能力**决定是否透传，与 dsh web 图形界面同一门禁语义：会话模型声明支持图片输入即透传（无需任何配置）；模型不支持时机器人明确告知"当前模型不支持图片输入"，可 `/model` 切换视觉模型后重发；模型信息未知时放行、由路由做最终裁决。文件和音频以 SDK 标准化文本透传给模型
 - 模型询问类工具（`ask_user_question` / `exit_plan_mode`）被禁用而非以卡片作答
 
 ## License

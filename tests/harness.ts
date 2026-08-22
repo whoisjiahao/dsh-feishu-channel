@@ -32,6 +32,7 @@ import type {
   HostCommands,
   HostDefaultModel,
   HostImageLimits,
+  HostLlm,
   HostPermissionSelect,
   HostSessionPersistence,
   HostUserMessage,
@@ -366,6 +367,8 @@ export function createFakeAgents() {
   let createGate: Deferred<void> | undefined
 
   const controls = {
+    /** Session model context fake agents report; tests set it per scenario. */
+    requestContext: undefined as { provider: string; model: string } | undefined,
     delayNextCreate(): void {
       if (createGate !== undefined) throw new Error('agent creation is already delayed')
       createGate = deferred<void>()
@@ -380,7 +383,12 @@ export function createFakeAgents() {
 
   const makeAgent = (sessionId: string): RecordedAgent['agent'] => ({
     id: sessionId,
-    session: { id: sessionId, requestContext: () => undefined },
+    session: {
+      id: sessionId,
+      requestContext: () => controls.requestContext === undefined
+        ? undefined
+        : { ...controls.requestContext },
+    },
     followup: vi.fn<(m: HostUserMessage) => void>(),
     cancel: vi.fn<(cause: string) => void>(),
   })
@@ -510,6 +518,7 @@ export interface HarnessServices {
   apiProxy?: object
   tools?: object
   attachments?: HostAttachments
+  llm?: HostLlm
   sessionPersistence?: HostSessionPersistence
   settings?: object
   loader?: { await(): Promise<unknown> }
@@ -569,6 +578,7 @@ export async function mountChannel(
   if (services.commands !== undefined) ctx.provide('commands', services.commands)
   if (services.apiProxy !== undefined) ctx.provide('apiProxy', services.apiProxy)
   if (services.attachments !== undefined) ctx.provide('attachments', services.attachments)
+  if (services.llm !== undefined) ctx.provide('llm', services.llm)
   if (services.sessionPersistence !== undefined) ctx.provide('sessionPersistence', services.sessionPersistence)
   if (services.loader !== undefined) ctx.provide('loader', services.loader)
   const fake = createFakePort()
@@ -617,6 +627,8 @@ export async function mountChannel(
     fiber,
     fake,
     agents,
+    /** Per-test model context the fake agents report to image admission. */
+    agentsControls: agents.controls,
     notices,
     logs,
     portAuthorizations,

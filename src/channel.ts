@@ -10,6 +10,7 @@ import type {
   LarkChannelError,
   NormalizedMessage,
   RejectEvent,
+  ResourceDescriptor,
 } from '@larksuite/channel'
 import { AgentRegistry, type OwnedAgent } from './agent-registry.ts'
 import { createApprovalGate, type ApprovalTurn } from './approval-gate.ts'
@@ -59,9 +60,10 @@ import type {
   HostUserMessage,
   HostWorkspace,
   HostWorkspaceRegistry,
+  HostLlm,
 } from './host.ts'
 import { isToolCallEvent, isTurnEndEvent } from './host.ts'
-import { collectImages, type CollectedImages, type ImagePort } from './images.ts'
+import { collectImages, emptyCollection, noteOnly, type CollectedImages, type ImagePort } from './images.ts'
 import { isCopyErrorAction, isRetryAction, type ToolPresenter } from './presentation/feishu-card.ts'
 import {
   createReplyPresenter,
@@ -304,20 +306,51 @@ export function installChannel(
     ctx.logger.warn('outbound send failed: %s', message)
   }
 
-  const collectMessageImages = (message: NormalizedMessage): Promise<CollectedImages> => {
-    const collection = collectImages(
-      message,
-      port,
-      ctx.get('attachments') as HostAttachments | undefined,
-      config.attachImages,
-      imageController.signal,
-    )
+  const collectMessageImages = (message: NormalizedMessage, binding: ConversationBinding): Promise<CollectedImages> => {
+    const collection = admitAndCollectImages(message, binding)
     imageCollections.add(collection)
     collection.then(
       () => { imageCollections.delete(collection) },
       () => { imageCollections.delete(collection) },
     )
     return collection
+  }
+
+  /**
+   * Image admission mirrors the web send path: refuse only when the session's
+   * current model is KNOWN to lack image input (resolved modalities present
+   * without 'image'); an unknown model, unknown modalities, or a failed
+   * lookup admit, leaving the provider as the final authority.
+   */
+  const admitAndCollectImages = async (
+    message: NormalizedMessage,
+    binding: ConversationBinding,
+  ): Promise<CollectedImages> => {
+    const hasImages = message.resources.some((resource: ResourceDescriptor) => resource.type === 'image')
+    if (!hasImages) return emptyCollection()
+
+    const context = binding.owner.handle.agent.session.requestContext()
+    const llm = ctx.get('llm') as HostLlm | undefined
+    if (context?.provider !== undefined && context.model !== undefined && llm !== undefined) {
+      try {
+        const info = await llm.resolveModelInfo(context.provider, context.model)
+        if (info.inputModalities !== undefined && !info.inputModalities.includes('image')) {
+          return noteOnly(
+            '（用户发送了 ' + message.resources.filter((resource: ResourceDescriptor) => resource.type === 'image').length
+            + ' 张图片：当前模型 ' + context.model + ' 不支持图片输入，未传递图片；可用 /model 切换视觉模型后重发）',
+          )
+        }
+      } catch {
+        // Lookup failure admits, exactly like unknown modalities in the web path.
+      }
+    }
+    return collectImages(
+      message,
+      port,
+      ctx.get('attachments') as HostAttachments | undefined,
+      true,
+      imageController.signal,
+    )
   }
 
   const approvals = createApprovalGate({
@@ -745,7 +778,7 @@ export function installChannel(
         return
       }
 
-      const images = await collectMessageImages(message)
+      const images = await collectMessageImages(message, binding)
       if (!active) return
       if (!state.agents.isCurrent(owner)) {
         owner = await state.agents.acquire(target.conversationKey)

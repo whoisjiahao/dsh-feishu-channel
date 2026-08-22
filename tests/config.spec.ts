@@ -16,7 +16,6 @@ describe('resolveConfig', () => {
     expect(resolved.cwd).toContain('.dsh-feishu')
     expect(resolved.sessionScope).toBe('chat')
     expect(resolved.showProcess).toBe(true)
-    expect(resolved.attachImages).toBe(false)
     expect(resolved.requireMention).toBe(true)
     expect(resolved.denyTools).toContain('ask_user_question')
     expect(resolved.maxTimelineItems).toBe(12)

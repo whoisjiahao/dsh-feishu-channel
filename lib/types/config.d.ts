@@ -90,7 +90,6 @@ export interface Config {
     /** Show what the agent did on its way to an answer. */
     showProcess?: boolean;
     /** Pass images a chat sends on to the model. Off by default. */
-    attachImages?: boolean;
     /** Register this channel's commands on the bot's slash panel. */
     syncSlashCommands?: boolean;
     /** Tools chat agents may not call, denied per agent at execution. */
@@ -135,7 +134,6 @@ export interface ResolvedConfig {
     preset?: string | undefined;
     sessionScope: SessionScope;
     showProcess: boolean;
-    attachImages: boolean;
     syncSlashCommands: boolean;
     denyTools: string[];
     requireMention: boolean;

@@ -18,7 +18,6 @@
         # model: deepseek-chat
         # sessionScope: chat              # chat-thread / chat-sender 分得更细
         # showProcess: true               # 关闭则只发答案
-        # attachImages: false             # 仅视觉路由开启
         # syncSlashCommands: true         # 同步命令到飞书斜杠面板；裸命令在聊天内打开交互卡
         # denyTools: [ask_user_question, exit_plan_mode]  # 答案无法到达聊天的工具
         # pricing:                        # 缺省已内置 DeepSeek 官方牌价（v4-flash / v4-flash-vision-exp / v4-pro，含缓存命中与空闲档）

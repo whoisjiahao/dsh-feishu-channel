@@ -285,6 +285,16 @@ export interface HostSettings {
         base?: unknown;
     }): HostSettingsScope;
 }
+/**
+ * The model-facts surface this channel reads for image admission, mirroring
+ * the web send path: a model refuses images only when its resolved
+ * `inputModalities` are known and lack `'image'`; unknown modalities admit.
+ */
+export interface HostLlm {
+    resolveModelInfo(provider: string, model: string): Promise<{
+        inputModalities?: readonly string[];
+    }>;
+}
 /** One immutable entry in the host session log; narrowed via the guards below. */
 export interface HostSessionEvent {
     readonly type: string;

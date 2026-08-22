@@ -13,5 +13,7 @@ export interface CollectedImages {
     readonly notes: string[];
 }
 /** Download accepted images, commit bounded bytes, and always remove staging files. */
-export declare function collectImages(message: NormalizedMessage, port: ImagePort, attachments: HostAttachments | undefined, enabled: boolean, signal?: AbortSignal): Promise<CollectedImages>;
+export declare function collectImages(message: NormalizedMessage, port: ImagePort, attachments: HostAttachments | undefined, enabled: boolean, signal?: AbortSignal, disabledNote?: string): Promise<CollectedImages>;
+export declare function emptyCollection(): CollectedImages;
+export declare function noteOnly(note: string): CollectedImages;
 //# sourceMappingURL=images.d.ts.map

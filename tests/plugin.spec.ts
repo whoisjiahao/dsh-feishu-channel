@@ -1042,22 +1042,29 @@ describe('images', () => {
     resources: [{ type: 'image', fileKey: 'img_1', fileName: 'a.png' }],
   })
 
-  it('notes images sent while attachImages is off', async () => {
-    const h = await mount()
+  it('refuses images when the current model lacks image input', async () => {
+    const h = await mount({}, {
+      llm: { resolveModelInfo: async () => ({ inputModalities: ['text'] }) },
+    })
+    h.agentsControls.requestContext = { provider: 'fake', model: 'text-only-model' }
     await h.fake.emitMessage(imageMessage())
     const created = await firstAgent(h)
     await vi.waitFor(() => { expect(created.agent.followup).toHaveBeenCalledTimes(1) })
     const text = created.agent.followup.mock.calls[0]![0]!.content[0]!
     expect(text).toEqual({
       type: 'text',
-      text: 'look at this\n（用户发送了 1 张图片，本渠道未向模型传递图片：attachImages 未开启，可在部署配置中开启后重发）',
+      text: 'look at this\n（用户发送了 1 张图片：当前模型 text-only-model 不支持图片输入，未传递图片；可用 /model 切换视觉模型后重发）',
     })
     expect(created.agent.followup.mock.calls[0]![0]!.content).toHaveLength(1)
   })
 
-  it('downloads and attaches images when enabled', async () => {
+  it('downloads and attaches images when the model admits them', async () => {
     const attachments = createFakeAttachments()
-    const h = await mount({ attachImages: true }, { attachments: attachments.service })
+    const h = await mount({}, {
+      attachments: attachments.service,
+      llm: { resolveModelInfo: async () => ({ inputModalities: ['text', 'image'] }) },
+    })
+    h.agentsControls.requestContext = { provider: 'fake', model: 'vision-model' }
     h.fake.resourceBytes.set('img_1', { buffer: new Uint8Array([1, 2, 3]), contentType: 'image/png' })
     await h.fake.emitMessage(imageMessage())
     const created = await firstAgent(h)
@@ -1069,8 +1076,21 @@ describe('images', () => {
     expect(attachments.saved).toEqual([{ mediaType: 'image/png', bytes: 3, name: 'a.png' }])
   })
 
+  it('admits images when no model facts are available (parity with the web path)', async () => {
+    const attachments = createFakeAttachments()
+    const h = await mount({}, { attachments: attachments.service })
+    h.fake.resourceBytes.set('img_1', { buffer: new Uint8Array([7]), contentType: 'image/jpeg' })
+    await h.fake.emitMessage(imageMessage())
+    const created = await firstAgent(h)
+    await vi.waitFor(() => { expect(created.agent.followup).toHaveBeenCalledTimes(1) })
+    const content = created.agent.followup.mock.calls[0]![0]!.content
+    expect(content[1]).toEqual(expect.objectContaining({ type: 'image' }))
+    expect(attachments.saved).toEqual([{ mediaType: 'image/jpeg', bytes: 1, name: 'a.png' }])
+  })
+
   it('leaves a note when an image cannot be downloaded', async () => {
-    const h = await mount({ attachImages: true }, { attachments: createFakeAttachments().service })
+    const h = await mount({}, { attachments: createFakeAttachments().service, llm: { resolveModelInfo: async () => ({ inputModalities: ['text', 'image'] }) } })
+    h.agentsControls.requestContext = { provider: 'fake', model: 'vision-model' }
     await h.fake.emitMessage(imageMessage())
     const created = await firstAgent(h)
     await vi.waitFor(() => { expect(created.agent.followup).toHaveBeenCalledTimes(1) })
