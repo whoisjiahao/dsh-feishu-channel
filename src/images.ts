@@ -34,7 +34,7 @@ export async function collectImages(
   )
   if (images.length === 0) return emptyCollection()
   if (!enabled) {
-    return noteOnly('（用户发送了 ' + images.length + ' 张图片，本渠道未向模型传递图片：attachImages 未开启）')
+    return noteOnly('（用户发送了 ' + images.length + ' 张图片，本渠道未向模型传递图片：attachImages 未开启，可在部署配置中开启后重发）')
   }
   if (attachments === undefined) {
     return noteOnly('（用户发送了 ' + images.length + ' 张图片，但本部署没有组合附件存储，模型看不到它们）')

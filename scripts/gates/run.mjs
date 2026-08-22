@@ -126,6 +126,19 @@ function gatePack() {
   check('pack version matches package.json', declared !== undefined && packed === declared,
     'package.json version ' + declared + ' vs packed ' + packed)
 
+  // README version references follow the same discipline: badge, install tag,
+  // and tgz names are hand-copied per release and drift silently otherwise.
+  const readme = readFileSync(join(ROOT, 'README.md'), 'utf8')
+  check('README badge carries package version',
+    readme.includes(`version-${declared}-`),
+    `README 缺少 version-${declared}- 徽章引用`)
+  check('README install tag carries package version',
+    readme.includes(`#v${declared}`),
+    `README 缺少 #v${declared} 安装引用`)
+  check('README tgz name carries package version',
+    readme.includes(`dsh-feishu-channel-${declared}.tgz`),
+    `README 缺少 dsh-feishu-channel-${declared}.tgz 引用`)
+
   const stale = files.filter(file =>
     file.startsWith('doctor/')
     || file.startsWith('src/render/')

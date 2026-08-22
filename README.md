@@ -3,7 +3,7 @@
 <p align="center"><strong>把飞书变成 DSH 的遥控器</strong> —— 双向对话、流式富卡片、一键审批、扫码即用。</p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.7.2-1f6feb?style=flat" alt="version">
+  <img src="https://img.shields.io/badge/version-0.7.3-1f6feb?style=flat" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-3fb950?style=flat" alt="license">
   <img src="https://img.shields.io/badge/DSH-bundle%20plugin-6e40c9?style=flat" alt="DSH bundle plugin">
   <a href="https://github.com/whoisjiahao/dsh-feishu-channel/actions/workflows/gates.yml"><img src="https://github.com/whoisjiahao/dsh-feishu-channel/actions/workflows/gates.yml/badge.svg" alt="gates"></a>
@@ -27,14 +27,16 @@
 
 ## 快速开始
 
+> **环境要求**：DeepSeek Harness 的 `dsh web`（本插件在 **0.1.1-rc.2** 主线上开发并实测，依赖宿主 agents / settings / commands 等核心服务，标准 dsh web 组合自带）；Node `^22.19.0 || >=24`。
+
 **① 安装**（三选一，装进你的 web profile；命令即转发 pnpm，在 `~/.dsh/profiles/web` 内执行）：
 
 ```sh
 # 已发布版本（需要对应 tag 已推送到 GitHub）
-dsh plugin --profile web add github:whoisjiahao/dsh-feishu-channel#v0.7.2
+dsh plugin --profile web add github:whoisjiahao/dsh-feishu-channel#v0.7.3
 
 # 或：从 GitHub Releases 下载 tgz 后本地安装（无需网络解析 git 引用）
-dsh plugin --profile web add ~/Downloads/dsh-feishu-channel-0.7.2.tgz
+dsh plugin --profile web add ~/Downloads/dsh-feishu-channel-0.7.3.tgz
 
 # 或：开发模式——链接本仓库，pnpm build 后热重载即可见
 dsh plugin --profile web add file:/绝对路径/dsh-feishu-channel
@@ -80,9 +82,9 @@ test -f ~/.dsh/profiles/$PROFILE/package.json && echo profile-ok
 
 ```sh
 # A. 发布版（要求 GitHub 存在 v0.7.1 tag；未发布则用 B）
-dsh plugin --profile $PROFILE add github:whoisjiahao/dsh-feishu-channel#v0.7.2
+dsh plugin --profile $PROFILE add github:whoisjiahao/dsh-feishu-channel#v0.7.3
 # B. 本地 tgz（从 Releases 资产下载，或仓库内 pnpm pack 产出）
-dsh plugin --profile $PROFILE add /绝对路径/dsh-feishu-channel-0.7.2.tgz
+dsh plugin --profile $PROFILE add /绝对路径/dsh-feishu-channel-0.7.3.tgz
 ```
 
 完成标志：`~/.dsh/profiles/$PROFILE/package.json` 的 `dependencies` 出现 `"dsh-feishu-channel"`。
@@ -208,6 +210,7 @@ dsh plugin --profile $PROFILE remove dsh-feishu-channel
 - 点击必须同时匹配动作、原卡片、所在聊天、当前会话与允许的操作人；旧命令卡自动失效，同名 callId 在不同会话之间不会串用参数
 - 拒绝入站保持静默：不向未授权者暴露边界事实
 - 卸载即净：transport 断开、自有 agent 全部 dispose、挂起审批全部结算为 cancelled
+- `ask_user_question` / `exit_plan_mode` 默认禁用：它们把提问弹到 `ctx.userQuestions` 的唯一注册方（通常是 dsh web 图形界面），飞书用户看不到也答不了，只会挂起到超时；禁用后模型会直接在聊天里用文字提问、用文字给计划。若你的部署以别处作答，可从 `denyTools` 移除
 
 ## 开发
 
@@ -226,7 +229,7 @@ pnpm build        # tsc + tsdown，lib/ 提交进 git
 - 配置只在启动时读取一次（patch 层与 settings 层都生效，后者优先），修改需重启
 - chat agent 存活到插件卸载，无空闲驱逐
 - 停机期间到达的消息不会重放（transport 无游标）
-- 文件和音频只以 SDK 标准化文本透传；图片是例外（默认关闭）
+- 文件和音频以 SDK 标准化文本透传给模型；图片默认**不**透传——这是隐私与成本的保守默认（聊天图片会原样进入模型上下文并显著增加 token，且非视觉路由会报错），不是技术限制：视觉模型部署把 `attachImages` 设为 `true` 即可透传，未开启时机器人会明确告知用户图片未被传递
 - 模型询问类工具（`ask_user_question` / `exit_plan_mode`）被禁用而非以卡片作答
 
 ## License

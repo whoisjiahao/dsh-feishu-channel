@@ -1050,7 +1050,7 @@ describe('images', () => {
     const text = created.agent.followup.mock.calls[0]![0]!.content[0]!
     expect(text).toEqual({
       type: 'text',
-      text: 'look at this\n（用户发送了 1 张图片，本渠道未向模型传递图片：attachImages 未开启）',
+      text: 'look at this\n（用户发送了 1 张图片，本渠道未向模型传递图片：attachImages 未开启，可在部署配置中开启后重发）',
     })
     expect(created.agent.followup.mock.calls[0]![0]!.content).toHaveLength(1)
   })
