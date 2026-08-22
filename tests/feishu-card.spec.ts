@@ -31,6 +31,7 @@ const options: CardRenderOptions = {
 interface CardElement {
   tag?: string
   element_id?: string
+  flex_mode?: string
   expanded?: boolean
   content?: string
   margin?: string
@@ -503,6 +504,9 @@ describe('renderCard', () => {
     expect(box).toContain('last attempt')
     const actions = elementOf(parsed, 'failure_actions')
     expect(actions?.tag).toBe('column_set')
+    // Deterministic side-by-side pair: the mobile client ignores 'stretch'
+    // (measured 2026-08-21), so the layout contract is 'none' everywhere.
+    expect(actions?.flex_mode).toBe('none')
     const actionsJson = JSON.stringify(actions)
     expect(actionsJson).toContain('重试')
     expect(actionsJson).toContain(RETRY_ACTION)

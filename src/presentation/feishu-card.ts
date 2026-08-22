@@ -584,6 +584,9 @@ function composeFailureActions(view: TurnView): CardNode {
   return {
     tag: 'column_set',
     element_id: 'failure_actions',
+    // Measured on the mobile client (2026-08-21): flex_mode 'stretch' is NOT
+    // honored for this structure — buttons render side-by-side either way, so
+    // keep the deterministic 'none' (proportional squeeze, content-width pair).
     flex_mode: 'none',
     horizontal_spacing: SPACE_3,
     columns: [
