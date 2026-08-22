@@ -10,6 +10,59 @@ import type { SessionScope } from './conversation.ts';
  * relative name under the user profile on Windows).
  */
 export declare function defaultChatWorkspaceDir(): string;
+/**
+ * Half-open `HH:MM` wall-clock window in Beijing time (UTC+8), independent of
+ * the host's timezone: `start` inclusive, `end` exclusive. An end earlier than
+ * the start wraps past midnight.
+ */
+export interface TimeWindow {
+    /** Inclusive window start, `HH:MM` (24-hour). */
+    start: string;
+    /** Exclusive window end, `HH:MM` (24-hour). */
+    end: string;
+}
+/** Discounted per-1M-token prices applied while a turn's usage lands off-peak. */
+export interface OffPeakPricing {
+    /** Off-peak price per 1M cache-miss input tokens. */
+    input: number;
+    /** Off-peak price per 1M output tokens. */
+    output: number;
+    /** Off-peak price per 1M cache-hit input tokens; defaults to {@link input}. */
+    cacheHitInput?: number;
+}
+/** Per-million-token price for one model, as configured by the deployment. */
+export interface ModelPricing {
+    /** Currency symbol prefixed to the rendered cost (default ¥). */
+    currency?: string;
+    /** Peak price per 1M cache-miss input tokens. */
+    input: number;
+    /** Peak price per 1M output tokens. */
+    output: number;
+    /**
+     * Peak price per 1M cache-hit input tokens; defaults to {@link input}, so a
+     * table without hit rates overestimates rather than underestimates.
+     */
+    cacheHitInput?: number;
+    /**
+     * Time-differentiated rates (DeepSeek 空闲时段): used, with an 空闲 marker on
+     * the row, when the usage lands inside the deployment's off-peak windows.
+     */
+    offPeak?: OffPeakPricing;
+}
+/**
+ * Built-in rates for the DeepSeek catalog — api-docs.deepseek.com pricing as
+ * of the 2026-08-17 schedule: peak is Beijing 9:00–12:00 & 14:00–18:00,
+ * off-peak (空闲) half price otherwise. Input rates are the cache-miss ones;
+ * cache-hit inputs bill at `cacheHitInput`. Deployments override per model id;
+ * an entry replaces the built-in one whole.
+ */
+export declare const DEFAULT_PRICING: Readonly<Record<string, ModelPricing>>;
+/**
+ * DeepSeek's published peak schedule (api-docs.deepseek.com pricing): peak is
+ * Beijing 9:00–12:00 and 14:00–18:00, so off-peak is the complement — the
+ * midday and overnight windows below, billed at half price.
+ */
+export declare const DEFAULT_OFF_PEAK_WINDOWS: readonly TimeWindow[];
 /** Plugin configuration supplied by the profile composition. */
 export interface Config {
     /** Lark/Feishu app id (cli_...); absent (with no stored credential) starts first-boot QR registration. */
@@ -52,6 +105,19 @@ export interface Config {
     approvers?: string[];
     /** Head-meta fields shown in the status-row disclosure (duration stays in the row). */
     footerFields?: string[];
+    /**
+     * Per-model token prices keyed by the card's model id; entries add the 费用
+     * row to the status-row disclosure. Merged over {@link DEFAULT_PRICING} by
+     * model id (a configured entry replaces the built-in one whole), so the
+     * DeepSeek catalog bills out of the box and other models join by config.
+     */
+    pricing?: Record<string, ModelPricing>;
+    /**
+     * Beijing-time windows (UTC+8) that decide when a priced model's `offPeak`
+     * rates apply. Defaults to DeepSeek's published schedule; override for other
+     * providers or schedule changes. `[]` disables off-peak billing.
+     */
+    offPeakWindows?: TimeWindow[];
     /** Maximum timeline items shown before folding. */
     maxTimelineItems?: number;
     /** Table overflow policy beyond the card's table budget. */
@@ -77,6 +143,8 @@ export interface ResolvedConfig {
     groupAllowlist: string[];
     approvers: string[];
     footerFields: string[];
+    pricing: Record<string, ModelPricing>;
+    offPeakWindows: TimeWindow[];
     maxTimelineItems: number;
     tableOverflowMode: 'compact' | 'truncate';
 }

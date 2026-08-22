@@ -24,6 +24,86 @@ export function defaultChatWorkspaceDir(): string {
   return join(homedir(), '.dsh-feishu')
 }
 
+/**
+ * Half-open `HH:MM` wall-clock window in Beijing time (UTC+8), independent of
+ * the host's timezone: `start` inclusive, `end` exclusive. An end earlier than
+ * the start wraps past midnight.
+ */
+export interface TimeWindow {
+  /** Inclusive window start, `HH:MM` (24-hour). */
+  start: string
+  /** Exclusive window end, `HH:MM` (24-hour). */
+  end: string
+}
+
+/** Discounted per-1M-token prices applied while a turn's usage lands off-peak. */
+export interface OffPeakPricing {
+  /** Off-peak price per 1M cache-miss input tokens. */
+  input: number
+  /** Off-peak price per 1M output tokens. */
+  output: number
+  /** Off-peak price per 1M cache-hit input tokens; defaults to {@link input}. */
+  cacheHitInput?: number
+}
+
+/** Per-million-token price for one model, as configured by the deployment. */
+export interface ModelPricing {
+  /** Currency symbol prefixed to the rendered cost (default ¥). */
+  currency?: string
+  /** Peak price per 1M cache-miss input tokens. */
+  input: number
+  /** Peak price per 1M output tokens. */
+  output: number
+  /**
+   * Peak price per 1M cache-hit input tokens; defaults to {@link input}, so a
+   * table without hit rates overestimates rather than underestimates.
+   */
+  cacheHitInput?: number
+  /**
+   * Time-differentiated rates (DeepSeek 空闲时段): used, with an 空闲 marker on
+   * the row, when the usage lands inside the deployment's off-peak windows.
+   */
+  offPeak?: OffPeakPricing
+}
+
+/**
+ * Built-in rates for the DeepSeek catalog — api-docs.deepseek.com pricing as
+ * of the 2026-08-17 schedule: peak is Beijing 9:00–12:00 & 14:00–18:00,
+ * off-peak (空闲) half price otherwise. Input rates are the cache-miss ones;
+ * cache-hit inputs bill at `cacheHitInput`. Deployments override per model id;
+ * an entry replaces the built-in one whole.
+ */
+export const DEFAULT_PRICING: Readonly<Record<string, ModelPricing>> = {
+  'deepseek-v4-flash': {
+    input: 3,
+    output: 9,
+    cacheHitInput: 0.1,
+    offPeak: { input: 1.5, output: 4.5, cacheHitInput: 0.05 },
+  },
+  'deepseek-v4-flash-vision-exp': {
+    input: 3,
+    output: 9,
+    cacheHitInput: 0.1,
+    offPeak: { input: 1.5, output: 4.5, cacheHitInput: 0.05 },
+  },
+  'deepseek-v4-pro': {
+    input: 9,
+    output: 27,
+    cacheHitInput: 0.3,
+    offPeak: { input: 4.5, output: 13.5, cacheHitInput: 0.15 },
+  },
+}
+
+/**
+ * DeepSeek's published peak schedule (api-docs.deepseek.com pricing): peak is
+ * Beijing 9:00–12:00 and 14:00–18:00, so off-peak is the complement — the
+ * midday and overnight windows below, billed at half price.
+ */
+export const DEFAULT_OFF_PEAK_WINDOWS: readonly TimeWindow[] = [
+  { start: '12:00', end: '14:00' },
+  { start: '18:00', end: '09:00' },
+]
+
 /** Plugin configuration supplied by the profile composition. */
 export interface Config {
   /** Lark/Feishu app id (cli_...); absent (with no stored credential) starts first-boot QR registration. */
@@ -66,6 +146,19 @@ export interface Config {
   approvers?: string[]
   /** Head-meta fields shown in the status-row disclosure (duration stays in the row). */
   footerFields?: string[]
+  /**
+   * Per-model token prices keyed by the card's model id; entries add the 费用
+   * row to the status-row disclosure. Merged over {@link DEFAULT_PRICING} by
+   * model id (a configured entry replaces the built-in one whole), so the
+   * DeepSeek catalog bills out of the box and other models join by config.
+   */
+  pricing?: Record<string, ModelPricing>
+  /**
+   * Beijing-time windows (UTC+8) that decide when a priced model's `offPeak`
+   * rates apply. Defaults to DeepSeek's published schedule; override for other
+   * providers or schedule changes. `[]` disables off-peak billing.
+   */
+  offPeakWindows?: TimeWindow[]
   /** Maximum timeline items shown before folding. */
   maxTimelineItems?: number
   /** Table overflow policy beyond the card's table budget. */
@@ -92,6 +185,8 @@ export interface ResolvedConfig {
   groupAllowlist: string[]
   approvers: string[]
   footerFields: string[]
+  pricing: Record<string, ModelPricing>
+  offPeakWindows: TimeWindow[]
   maxTimelineItems: number
   tableOverflowMode: 'compact' | 'truncate'
 }
@@ -115,6 +210,19 @@ export const Config: z<Config> = z.object({
   groupAllowlist: z.array(String),
   approvers: z.array(String),
   footerFields: z.array(String),
+  pricing: z.dict(z.object({
+    currency: z.string(),
+    input: z.number(),
+    output: z.number(),
+    offPeak: z.object({
+      input: z.number(),
+      output: z.number(),
+    }),
+  })),
+  offPeakWindows: z.array(z.object({
+    start: z.string(),
+    end: z.string(),
+  })),
   maxTimelineItems: z.number(),
   tableOverflowMode: z.union(['compact', 'truncate'] as const),
 })
@@ -138,8 +246,50 @@ export function resolveConfig(config: Config): ResolvedConfig {
     senderAllowlist: config.senderAllowlist ?? [],
     groupAllowlist: config.groupAllowlist ?? [],
     approvers: config.approvers ?? [],
-    footerFields: config.footerFields ?? ['duration', 'model', 'input_tokens', 'output_tokens', 'context'],
+    footerFields: config.footerFields ?? ['duration', 'model', 'input_tokens', 'output_tokens', 'cost', 'context'],
+    pricing: seededPricing(config.pricing),
+    offPeakWindows: resolveOffPeakWindows(config.offPeakWindows),
     maxTimelineItems: config.maxTimelineItems ?? 12,
     tableOverflowMode: config.tableOverflowMode ?? 'compact',
   }
+}
+
+/**
+ * Fresh built-in entries merged under the deployment's explicit ones: a
+ * configured model id replaces the built-in entry whole; everything else
+ * keeps billing out of the box. Copies defensively so callers cannot mutate
+ * {@link DEFAULT_PRICING} through the resolved config.
+ */
+function seededPricing(explicit: Record<string, ModelPricing> | undefined): Record<string, ModelPricing> {
+  const seeded: Record<string, ModelPricing> = {}
+  for (const [id, price] of Object.entries(DEFAULT_PRICING)) {
+    seeded[id] = { ...price, ...(price.offPeak !== undefined ? { offPeak: { ...price.offPeak } } : {}) }
+  }
+  return { ...seeded, ...explicit }
+}
+
+/**
+ * Fail fast on malformed windows instead of silently never matching: each
+ * bound must be a 24-hour `HH:MM`. An explicit `[]` disables off-peak billing.
+ */
+function resolveOffPeakWindows(windows: TimeWindow[] | undefined): TimeWindow[] {
+  const resolved = windows ?? [...DEFAULT_OFF_PEAK_WINDOWS.map(window => ({ ...window }))]
+  for (const window of resolved) {
+    for (const bound of [window.start, window.end]) {
+      if (parseClock(bound) === undefined) {
+        throw new Error(`config.offPeakWindows: expected "HH:MM" (24-hour), got "${bound}"`)
+      }
+    }
+  }
+  return resolved
+}
+
+/** Minutes since midnight for a strict `H:MM`/`HH:MM` 24-hour clock string. */
+function parseClock(value: string): number | undefined {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(value)
+  if (match === null) return undefined
+  const hours = Number(match[1])
+  const minutes = Number(match[2])
+  if (hours > 23 || minutes > 59) return undefined
+  return hours * 60 + minutes
 }

@@ -428,6 +428,67 @@ describe('renderCard', () => {
     expect(textOf(parsed, 'head_output')).toBe('↓600')
   })
 
+  it('shows a cost row when the turn model has a configured price', () => {
+    const s = new TurnView(1)
+    s.observe(event('assistant/message', {
+      turn: 1,
+      message: { content: [{ type: 'text', text: '答案' }], source: { kind: 'model', model: 'deepseek-v4-flash' } },
+      usage: { inputTokens: 2_000_000, outputTokens: 1_000_000 },
+    }))
+    const parsed = parse(renderCard(s, {
+      ...options,
+      footerFields: ['duration', 'model', 'input_tokens', 'output_tokens', 'cost', 'context'],
+      pricing: { 'deepseek-v4-flash': { input: 4, output: 16 } },
+    }).card)
+    expect(textOf(parsed, 'head_cost')).toBe('¥24.00')
+    // Rows follow the requested field order; cost sits beside the token rows.
+    const details = elementOf(parsed, 'head_details')
+    const labels = (details?.columns?.[0]?.elements ?? []).map(element => element.text?.content ?? '')
+    expect(labels).toEqual(['模型', '输入 Token', '输出 Token', '费用', 'ctx'])
+  })
+
+  it('omits the cost row when pricing is absent or the model is unpriced', () => {
+    const observeUsage = (s: TurnView): void => {
+      s.observe(event('assistant/message', {
+        turn: 1,
+        message: { content: [{ type: 'text', text: '答案' }], source: { kind: 'model', model: 'deepseek-v4-flash' } },
+        usage: { inputTokens: 1200, outputTokens: 600 },
+      }))
+    }
+    const withoutPricing = new TurnView(1)
+    observeUsage(withoutPricing)
+    expect(elementOf(parse(renderCard(withoutPricing, options).card), 'head_cost')).toBeUndefined()
+
+    const unpricedModel = new TurnView(1)
+    observeUsage(unpricedModel)
+    const parsed = parse(renderCard(unpricedModel, {
+      ...options,
+      footerFields: ['duration', 'model', 'input_tokens', 'output_tokens', 'cost', 'context'],
+      pricing: { 'other-model': { input: 4, output: 16 } },
+    }).card)
+    expect(elementOf(parsed, 'head_cost')).toBeUndefined()
+    expect(JSON.stringify(parsed)).not.toContain('费用')
+  })
+
+  it('marks the cost row with 空闲 when the usage lands off-peak', () => {
+    const s = new TurnView(1)
+    s.observe(event('assistant/message', {
+      turn: 1,
+      message: { content: [{ type: 'text', text: '答案' }], source: { kind: 'model', model: 'deepseek-v4-flash' } },
+      usage: { inputTokens: 2_000_000, outputTokens: 1_000_000 },
+    }))
+    // Two complementary windows cover every wall clock, so the assertion does
+    // not depend on when the test runs.
+    const parsed = parse(renderCard(s, {
+      ...options,
+      footerFields: ['duration', 'model', 'input_tokens', 'output_tokens', 'cost', 'context'],
+      pricing: { 'deepseek-v4-flash': { input: 3, output: 9, offPeak: { input: 1.5, output: 4.5 } } },
+      offPeakWindows: [{ start: '00:00', end: '12:00' }, { start: '12:00', end: '00:00' }],
+    }).card)
+    // 2M×1.5 + 1M×4.5 → half of the ¥15.00 peak price.
+    expect(textOf(parsed, 'head_cost')).toBe('¥7.50 ·空闲')
+  })
+
   it('renders a failed card: red pill, tinted error box, and JSON 2.0 buttons', () => {
     const s = new TurnView(1)
     s.observe(event('turn/end', { turn: 1, reason: { kind: 'error', error: { code: 'READ_TIMEOUT', message: 'boom' } } }))

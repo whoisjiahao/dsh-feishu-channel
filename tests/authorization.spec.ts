@@ -14,6 +14,8 @@ const base: ResolvedConfig = {
   groupAllowlist: [],
   approvers: [],
   footerFields: [],
+  pricing: {},
+  offPeakWindows: [],
   maxTimelineItems: 12,
   tableOverflowMode: 'compact',
 }

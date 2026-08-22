@@ -5,10 +5,13 @@
 import type { HostSessionEvent } from '../host.ts';
 /** State rendered by one reply card. */
 export type TurnViewStatus = 'thinking' | 'in_progress' | 'completed' | 'failed';
-/** Token counts used by the card metadata row. */
+/** Token counts used by the card metadata and cost rows. */
 export interface TurnTokenUsage {
+    /** Cache-miss input tokens; the host already subtracts cache reads. */
     readonly inputTokens: number;
     readonly outputTokens: number;
+    /** Disjoint cache-hit input portion, billed at the hit rate when priced. */
+    readonly cacheReadTokens?: number;
 }
 /** One renderable process row. Raw reasoning and tool-result bodies are excluded. */
 export type TurnStep = {
@@ -40,6 +43,8 @@ export declare class TurnView {
     finishedAt: number | undefined;
     durationMs: number;
     usage: TurnTokenUsage | undefined;
+    /** When the usage-bearing message arrived: the billing-window anchor. */
+    usageAtMs: number | undefined;
     contextWindow: number | undefined;
     errorCode: string;
     errorMessage: string;

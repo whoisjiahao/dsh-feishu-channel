@@ -495,6 +495,8 @@ export function installChannel(
       maxTimelineItems: config.maxTimelineItems,
       tableOverflowMode: config.tableOverflowMode,
       footerFields: config.footerFields,
+      pricing: config.pricing,
+      offPeakWindows: config.offPeakWindows,
       presentCall,
       onFailure: reportSendFailure,
       initialContext: turn.owner.handle.agent.session.requestContext(),

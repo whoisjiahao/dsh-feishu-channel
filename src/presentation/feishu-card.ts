@@ -2,7 +2,9 @@
 
 import { cardKitStatusLine, statusTag } from '../card-design.ts'
 import { CARD_COLOR, SPACE_2, SPACE_3, SPACE_4, SPACE_5, SPACE_6, type CardTone } from '../card-tokens.ts'
+import type { ModelPricing, TimeWindow } from '../config.ts'
 import type { TurnStep, TurnView, TurnViewStatus } from './turn-view.ts'
+import { estimateCost } from './cost.ts'
 import { inspectCardBudget, type CardBudgetInspection } from './card-budget.ts'
 import {
   applyTableOverflow,
@@ -30,7 +32,7 @@ const COLOR = {
   failure: CARD_COLOR.red,
 } as const
 
-const DEFAULT_META_FIELDS = ['duration', 'model', 'input_tokens', 'output_tokens', 'context'] as const
+const DEFAULT_META_FIELDS = ['duration', 'model', 'input_tokens', 'output_tokens', 'cost', 'context'] as const
 
 /** Card-button payload marking this plugin's retry action. */
 export const RETRY_ACTION = 'dsh-feishu-channel/retry'
@@ -60,6 +62,10 @@ export interface CardRenderOptions {
   readonly maxTimelineItems: number
   readonly tableOverflowMode: 'compact' | 'truncate'
   readonly footerFields: readonly string[]
+  /** Per-model prices backing the cost row; absent or unmatched models hide it. */
+  readonly pricing?: Readonly<Record<string, ModelPricing>>
+  /** Beijing-time windows deciding when a priced model's off-peak rates apply. */
+  readonly offPeakWindows?: readonly TimeWindow[]
   readonly timelineExpanded?: boolean
   readonly presentCall?: ToolPresenter
 }
@@ -145,7 +151,7 @@ function composeReplyCard(view: TurnView, options: CardRenderOptions): CardNode 
   const now = Date.now()
   const renderedAt = isTerminal(view.status) ? view.finishedAt ?? now : now
   const elapsed = now - view.startedAt
-  const meta = collectCardMeta(view, options.footerFields, renderedAt)
+  const meta = collectCardMeta(view, options.footerFields, options.pricing, options.offPeakWindows, renderedAt)
   const elements = [
     composeStatusDisclosure(view.status, formatWallClock(renderedAt), meta),
     divider('head_divider', '0px -' + SPACE_6 + ' 0px -' + SPACE_6),
@@ -599,7 +605,13 @@ function copyableError(view: TurnView): string {
   return parts.join(' · ')
 }
 
-function collectCardMeta(view: TurnView, requested: readonly string[], renderedAt: number): CardMeta {
+function collectCardMeta(
+  view: TurnView,
+  requested: readonly string[],
+  pricing: Readonly<Record<string, ModelPricing>> | undefined,
+  offPeakWindows: readonly TimeWindow[] | undefined,
+  renderedAt: number,
+): CardMeta {
   const duration = isTerminal(view.status)
     ? formatDuration(view.durationMs / 1_000)
     : formatClock(renderedAt - view.startedAt)
@@ -619,6 +631,12 @@ function collectCardMeta(view: TurnView, requested: readonly string[], renderedA
       id: 'output',
       label: '输出 Token',
       value: usage !== undefined && usage.outputTokens > 0 ? '↓' + formatCount(usage.outputTokens) : '',
+    },
+    {
+      field: 'cost',
+      id: 'cost',
+      label: '费用',
+      value: estimateCost(usage, pricing, view.model, view.usageAtMs ?? view.startedAt, offPeakWindows),
     },
     { field: 'context', id: 'context', label: 'ctx', value: formatContext(inputTokens, view.contextWindow) },
   ]

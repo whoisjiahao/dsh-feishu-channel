@@ -1,4 +1,5 @@
 /** Compose the frozen Feishu reply-card UI from one transport-free turn view. */
+import type { ModelPricing, TimeWindow } from '../config.ts';
 import type { TurnView } from './turn-view.ts';
 import { type CardBudgetInspection } from './card-budget.ts';
 /** Card-button payload marking this plugin's retry action. */
@@ -24,6 +25,10 @@ export interface CardRenderOptions {
     readonly maxTimelineItems: number;
     readonly tableOverflowMode: 'compact' | 'truncate';
     readonly footerFields: readonly string[];
+    /** Per-model prices backing the cost row; absent or unmatched models hide it. */
+    readonly pricing?: Readonly<Record<string, ModelPricing>>;
+    /** Beijing-time windows deciding when a priced model's off-peak rates apply. */
+    readonly offPeakWindows?: readonly TimeWindow[];
     readonly timelineExpanded?: boolean;
     readonly presentCall?: ToolPresenter;
 }

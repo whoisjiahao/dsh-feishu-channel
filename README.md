@@ -3,7 +3,7 @@
 <p align="center"><strong>把飞书变成 DSH 的遥控器</strong> —— 双向对话、流式富卡片、一键审批、扫码即用。</p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.3.0-1f6feb?style=flat" alt="version">
+  <img src="https://img.shields.io/badge/version-0.6.0-1f6feb?style=flat" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-3fb950?style=flat" alt="license">
   <img src="https://img.shields.io/badge/DSH-bundle%20plugin-6e40c9?style=flat" alt="DSH bundle plugin">
   <a href="https://github.com/whoisjiahao/dsh-feishu-channel/actions/workflows/gates.yml"><img src="https://github.com/whoisjiahao/dsh-feishu-channel/actions/workflows/gates.yml/badge.svg" alt="gates"></a>
@@ -30,7 +30,7 @@
 **① 安装**（装进你的 web profile）：
 
 ```sh
-dsh plugin --profile web add github:whoisjiahao/dsh-feishu-channel#v0.3.0
+dsh plugin --profile web add github:whoisjiahao/dsh-feishu-channel#v0.6.0
 ```
 
 **② 重启 dsh web**，启动日志出现二维码：
@@ -122,7 +122,9 @@ feishu-channel: 请用飞书扫码创建应用…
 | attachImages | false | 是否把聊天图片传给模型（视觉路由才开） |
 | syncSlashCommands | true | 同步命令到飞书斜杠面板 |
 | denyTools | ask_user_question, exit_plan_mode | 聊天 agent 禁用的工具（答案无法到达聊天的工具） |
-| footerFields | 见源码 | 终态卡片展开详情字段（model/input/output tokens/context） |
+| footerFields | 见源码 | 终态卡片展开详情字段（model/input/output tokens/cost/context） |
+| pricing | 内置 DeepSeek 官方牌价 | 模型单价表（每百万 token）：默认已配好 `deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pro` 现行峰谷价；自定义条目按模型 id 与内置表合并，同名键整条覆盖。字段：`input`/`output` 高峰价、可选 `cacheHitInput` 缓存命中输入价（缺省按未命中价计，只会高估不会低估）、可选 `currency` 符号（默认 ¥）、可选 `offPeak: { input, output, cacheHitInput? }` 空闲档。配置后展开详情多一行「费用」，usage 落在空闲窗口内按折扣计并追加「·空闲」标记 |
+| offPeakWindows | DeepSeek 官方峰谷表 | 空闲时段窗口（北京时间 `HH:MM` 半开区间；end 早于 start 表示跨午夜）。默认按 DeepSeek 定价页：高峰为北京时间 9:00–12:00 与 14:00–18:00，其余为空闲（价格为高峰一半）；设为 `[]` 关闭分时计价 |
 | maxTimelineItems | 12 | 时间线最大条目数 |
 | tableOverflowMode | compact | 表格超限策略：compact（转字段列表）/ truncate（丢弃） |
 

@@ -21,6 +21,12 @@
         # attachImages: false             # 仅视觉路由开启
         # syncSlashCommands: true         # 同步命令到飞书斜杠面板；裸命令在聊天内打开交互卡
         # denyTools: [ask_user_question, exit_plan_mode]  # 答案无法到达聊天的工具
+        # pricing:                        # 缺省已内置 DeepSeek 官方牌价（v4-flash / v4-flash-vision-exp / v4-pro，含缓存命中与空闲档）
+        #   deepseek-v4-flash: { input: 3, output: 9, cacheHitInput: 0.1, offPeak: { input: 1.5, output: 4.5, cacheHitInput: 0.05 } }  # 自定义按模型 id 整条覆盖
+        #   other-model: { input: 2, output: 8, currency: '$' }   # 新模型直接加；无 cacheHitInput 时缓存命中按未命中价计
+        # offPeakWindows:                 # 空闲时段（北京时间 HH:MM 半开区间，end 早于 start 跨午夜）；缺省用 DeepSeek 官方峰谷表，[] 关闭
+        #   - { start: '12:00', end: '14:00' }
+        #   - { start: '18:00', end: '09:00' }
         requireMention: true
         # 授权只收窄、不设门禁：谁能私聊机器人由应用可见范围决定。默认服务任何
         # 被拉入的群（需 @）与任何应用可见的人。
