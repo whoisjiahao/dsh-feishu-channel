@@ -1,7 +1,7 @@
 {
   "name": "dsh-feishu-channel",
   "description": "Feishu/Lark IM channel for DeepSeek Harness: chats drive agents, answers render as streaming rich cards, approvals settle by button clicks",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "type": "module",
   "packageManager": "pnpm@11.7.0",
   "engines": {
@@ -52,16 +52,16 @@
     "url": "https://github.com/whoisjiahao/dsh-feishu-channel/issues"
   },
   "dependencies": {
-    "@deepseek-ai/schemastery": "^3.18.1",
+    "@deepseek-ai/schemastery": "^3.18.2",
     "@larksuite/channel": "^0.5.0",
     "qrcode-terminal": "^0.12.0"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "^4.0.1"
+    "@deepseek-ai/cordis": "^4.0.2"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/cordis-plugin-loader": "^1.0.2",
+    "@deepseek-ai/cordis": "^4.0.2",
+    "@deepseek-ai/cordis-plugin-loader": "^1.0.3",
     "@types/node": "^22.20.0",
     "@types/qrcode-terminal": "^0.12.2",
     "tsdown": "^0.22.2",

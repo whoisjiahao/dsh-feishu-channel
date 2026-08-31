@@ -45,6 +45,7 @@ DSH 运维者（安装/配置/扫码）                          <-> DSH 宿主�
 | 飞书流式卡片（创建/原地更新/完成态） | 富渲染回合输出 | 用户 |
 | 飞书审批卡片（提问/结算回写） | 权限决策面 | 用户 |
 | agent.followup/cancel/create/resume | 驱动 agent 回合 | DSH 宿主 |
+| sessionController（modelCatalog/selectModel/follow 投影基线） | 模型设置卡与权限设置卡的数据面；模型/权限"当前值"读自 follow 快照投影 | DSH 宿主 |
 | approval 决策结算 | 权限问题答案 | DSH 宿主 |
 | 控制台行 | 运维可观测性 | 运维者 |
 

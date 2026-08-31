@@ -397,7 +397,7 @@ describe('conversation-scope isolation', () => {
         ],
       }],
     })
-    const h = await mount({ sessionScope: 'chat-thread' }, { apiProxy: api.api })
+    const h = await mount({ sessionScope: 'chat-thread' }, { sessionController: api.api })
     await h.fake.emitMessage(fakeMessage({ threadId: 'omt_1', messageId: 'om_model_1', content: '/model' }))
     await vi.waitFor(() => { expect(h.fake.sent).toHaveLength(1) })
     const firstAgentRecord = h.agents.created[0]!
@@ -435,7 +435,7 @@ describe('conversation-scope isolation', () => {
       toast: { type: 'info', content: '正在执行 /new' },
     })
     await vi.waitFor(() => { expect(h.agents.created).toHaveLength(3) })
-    expect(first.agent.cancel).toHaveBeenCalledWith('user')
+    expect(first.agent.cancel).toHaveBeenCalledWith({ kind: 'user' })
     expect(first.dispose).toHaveBeenCalledTimes(1)
     expect(second.agent.cancel).not.toHaveBeenCalled()
     expect(second.dispose).not.toHaveBeenCalled()
@@ -523,7 +523,7 @@ describe('slash commands', () => {
 
     const response = await h.fake.emitCardAction(clickAction(firstButtonValue(h.fake.sent[0]!.input)))
     expect(response).toEqual({ toast: { type: 'info', content: '正在执行 /stop' } })
-    await vi.waitFor(() => { expect(created.agent.cancel).toHaveBeenCalledWith('user') })
+    await vi.waitFor(() => { expect(created.agent.cancel).toHaveBeenCalledWith({ kind: 'user' }) })
     await vi.waitFor(() => { expect(h.fake.updated).toHaveLength(1) })
     expect(JSON.stringify(h.fake.updated[0]!.card)).toContain('已停止当前任务')
   })
@@ -590,7 +590,7 @@ describe('slash commands', () => {
         { value: 'danger-full-access', name: 'Full access' },
       ],
     })
-    const h = await mount({}, { commands: commands.service, apiProxy: api.api })
+    const h = await mount({}, { commands: commands.service, sessionController: api.api })
     await h.fake.emitMessage(fakeMessage({ content: '/permission' }))
     await firstAgent(h)
     await vi.waitFor(() => { expect(h.fake.sent).toHaveLength(1) })
@@ -627,7 +627,7 @@ describe('slash commands', () => {
         { value: 'danger-full-access', name: 'Full access' },
       ],
     })
-    const h = await mount({}, { commands: commands.service, apiProxy: api.api })
+    const h = await mount({}, { commands: commands.service, sessionController: api.api })
     await h.fake.emitMessage(fakeMessage({ content: '/permission' }))
     await firstAgent(h)
     await vi.waitFor(() => { expect(h.fake.sent).toHaveLength(1) })
@@ -755,7 +755,7 @@ describe('slash commands', () => {
         }],
       }],
     })
-    const h = await mount({}, { apiProxy: api.api })
+    const h = await mount({}, { sessionController: api.api })
     await h.fake.emitMessage(fakeMessage({ content: '/model' }))
     const created = await firstAgent(h)
     await vi.waitFor(() => { expect(h.fake.sent).toHaveLength(1) })
@@ -795,7 +795,7 @@ describe('slash commands', () => {
     const next = h.agents.created[1]!
     expect(next.sessionId).not.toBe(first.sessionId)
     expect(next.sessionId.startsWith(chatSessionPrefix('oc_chat_1') + '~')).toBe(true)
-    expect(first.agent.cancel).toHaveBeenCalledWith('user')
+    expect(first.agent.cancel).toHaveBeenCalledWith({ kind: 'user' })
     expect(first.dispose).toHaveBeenCalled()
     expect(workspaces.detached).toContain(first.sessionId)
     expect(await outcome).toBe('cancelled')

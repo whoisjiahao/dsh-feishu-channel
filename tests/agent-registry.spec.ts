@@ -150,7 +150,7 @@ describe('AgentRegistry', () => {
     const replacement = await resetting
     expect(await acquiring).toBe(replacement)
     expect(replacement).not.toBe(previous)
-    expect(previous.handle.agent.cancel).toHaveBeenCalledWith('user')
+    expect(previous.handle.agent.cancel).toHaveBeenCalledWith({ kind: 'user' })
     expect(host.disposed).toContain(previous.handle.agent.session.id)
     await agents.close()
   })

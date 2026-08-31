@@ -2,3 +2,8 @@ allowBuilds:
   # protobufjs 的 postinstall 只打印版本兼容性提示；运行时不需要它，
   # 保持构建禁用以保证可复现。
   protobufjs: false
+minimumReleaseAgeExclude:
+  - '@deepseek-ai/cordis-plugin-loader@1.0.3'
+  - '@deepseek-ai/cordis@4.0.2'
+  - '@deepseek-ai/cosmokit@1.8.3'
+  - '@deepseek-ai/schemastery@3.18.2'

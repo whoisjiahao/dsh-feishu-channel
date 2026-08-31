@@ -65,7 +65,7 @@ export class AgentRegistry {
 
       if (previous !== undefined) {
         this.conversationBySession.delete(previous.handle.agent.session.id)
-        previous.handle.agent.cancel('user')
+        previous.handle.agent.cancel({ kind: 'user' })
         await this.detach(previous.handle.agent.session.id)
         await previous.handle.dispose().catch((error: unknown) => {
           this.report('disposing replaced session failed: ' + detail(error))

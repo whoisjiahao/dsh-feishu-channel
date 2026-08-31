@@ -22,11 +22,14 @@ describe('Feishu session commands', () => {
       reasoningEffort: 'high',
     }
     const selectModel = vi.fn(async (request: {
-      payload: { sessionId: string; provider: string; model: string; reasoningEffort?: string }
+      sessionId: string
+      provider: string
+      model: string
+      reasoningEffort?: string
     }) => {
-      const { sessionId: _sessionId, ...selected } = request.payload
+      const { sessionId: _sessionId, ...selected } = request
       current = { ...selected, reasoningEffort: selected.reasoningEffort ?? 'high' }
-      return { result: { ok: true as const, value: { selected } } }
+      return { selected }
     })
     const live = new Map<string, HostAgentHandle>()
     const created: HostAgentHandle[] = []
@@ -74,33 +77,37 @@ describe('Feishu session commands', () => {
       list: () => [{ name: 'status', description: '查看运行状态' }],
       execute: executeCommand,
     })
-    ctx.provide('apiProxy', {
-      sessions: {
-        models: async () => ({
-          result: {
-            ok: true as const,
-            value: {
-              current,
-              groups: [{
-                id: 'deepseek-official',
-                name: 'DeepSeek',
-                models: [{
-                  id: 'deepseek-v4-flash',
-                  name: 'DeepSeek V4 Flash',
-                  reasoning: {
-                    efforts: [{ id: 'high', name: '高' }, { id: 'max', name: '最高' }],
-                    defaultEffort: 'high',
-                  },
-                }, {
-                  id: 'deepseek-v4-pro',
-                  name: 'DeepSeek V4 Pro',
-                  reasoning: { efforts: [{ id: 'max', name: '最高' }], defaultEffort: 'max' },
-                }],
-              }],
+    ctx.provide('sessionController', {
+      modelCatalog: async () => ({
+        default: { ...current },
+        routableProviders: ['deepseek-official'],
+        groups: [{
+          id: 'deepseek-official',
+          name: 'DeepSeek',
+          models: [{
+            id: 'deepseek-v4-flash',
+            name: 'DeepSeek V4 Flash',
+            reasoning: {
+              efforts: [{ id: 'high', name: '高' }, { id: 'max', name: '最高' }],
+              defaultEffort: 'high',
             },
+          }, {
+            id: 'deepseek-v4-pro',
+            name: 'DeepSeek V4 Pro',
+            reasoning: { efforts: [{ id: 'max', name: '最高' }], defaultEffort: 'max' },
+          }],
+        }],
+        failures: [],
+      }),
+      selectModel,
+      async *follow() {
+        yield {
+          type: 'snapshot',
+          projections: {
+            asOfSeq: 0,
+            values: { modelSelection: { lastUsed: null, next: { ...current } } },
           },
-        }),
-        selectModel,
+        }
       },
     })
 
@@ -184,12 +191,10 @@ describe('Feishu session commands', () => {
     expect(modelResponse).toEqual({ toast: { type: 'info', content: '正在切换模型' } })
     await vi.waitFor(() => {
       expect(selectModel).toHaveBeenLastCalledWith(expect.objectContaining({
-        payload: {
-          sessionId: created[0]!.agent.session.id,
-          provider: 'deepseek-official',
-          model: 'deepseek-v4-pro',
-          reasoningEffort: 'max',
-        },
+        sessionId: created[0]!.agent.session.id,
+        provider: 'deepseek-official',
+        model: 'deepseek-v4-pro',
+        reasoningEffort: 'max',
       }))
     })
     await vi.waitFor(() => { expect(updateCard).toHaveBeenCalledWith('reply-3', expect.any(Object)) })
@@ -239,12 +244,10 @@ describe('Feishu session commands', () => {
     })
     await vi.waitFor(() => {
       expect(selectModel).toHaveBeenLastCalledWith(expect.objectContaining({
-        payload: {
-          sessionId: created[0]!.agent.session.id,
-          provider: 'deepseek-official',
-          model: 'deepseek-v4-flash',
-          reasoningEffort: 'max',
-        },
+        sessionId: created[0]!.agent.session.id,
+        provider: 'deepseek-official',
+        model: 'deepseek-v4-flash',
+        reasoningEffort: 'max',
       }))
     })
 

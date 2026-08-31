@@ -34,6 +34,8 @@ import type {
   HostImageLimits,
   HostLlm,
   HostPermissionSelect,
+  HostModelSelection,
+  HostSessionController,
   HostSessionPersistence,
   HostUserMessage,
 } from '../src/host.ts'
@@ -515,7 +517,7 @@ export interface HarnessServices {
   presets?: object
   workspaces?: object
   commands?: HostCommands
-  apiProxy?: object
+  sessionController?: object
   tools?: object
   attachments?: HostAttachments
   llm?: HostLlm
@@ -576,7 +578,7 @@ export async function mountChannel(
   if (services.tools !== undefined) ctx.provide('tools', services.tools)
   if (services.workspaces !== undefined) ctx.provide('workspaceRegistry', services.workspaces)
   if (services.commands !== undefined) ctx.provide('commands', services.commands)
-  if (services.apiProxy !== undefined) ctx.provide('apiProxy', services.apiProxy)
+  if (services.sessionController !== undefined) ctx.provide('sessionController', services.sessionController)
   if (services.attachments !== undefined) ctx.provide('attachments', services.attachments)
   if (services.llm !== undefined) ctx.provide('llm', services.llm)
   if (services.sessionPersistence !== undefined) ctx.provide('sessionPersistence', services.sessionPersistence)
@@ -790,9 +792,10 @@ export function createFakeSettings(stored: Record<string, unknown> = {}) {
   return { settings, updates, registered }
 }
 
-/** An in-memory Host model API (apiProxy) with a mutable directory. */
+/** An in-memory `sessionController` with a mutable model catalog and projections. */
 export function createFakeModelApi(
   directory: {
+    /** Deployment default served to sessions with no durable selection. */
     current: { provider: string; model: string; reasoningEffort?: string }
     groups: { id: string; name: string; models: {
       id: string
@@ -804,39 +807,50 @@ export function createFakeModelApi(
 ) {
   const selected: { sessionId: string; provider: string; model: string; reasoningEffort?: string }[] = []
   const state = { failModels: false, failSelect: false }
-  const current = () => ({ ...directory.current })
-  const api = {
-    sessions: {
-      async models(_request: { rpcId: string; payload: { sessionId: string } }) {
-        if (state.failModels) {
-          return { result: { ok: false as const, error: { code: 'E_API', message: 'models unavailable (fake)' } } }
-        }
-        return { result: { ok: true as const, value: { current: current(), groups: directory.groups } } }
-      },
-      async selectModel(request: { rpcId: string; payload: { sessionId: string; provider: string; model: string; reasoningEffort?: string } }) {
-        if (state.failSelect) {
-          return { result: { ok: false as const, error: { code: 'E_API', message: 'select failed (fake)' } } }
-        }
-        const { sessionId, ...selection } = request.payload
-        selected.push({ sessionId, ...selection })
-        directory.current = { ...selection }
-        return { result: { ok: true as const, value: { selected: selection } } }
-      },
-      async history(_request: { rpcId: string; payload: { sessionId: string; maxMessages?: number } }) {
-        return {
-          result: {
-            ok: true as const,
-            value: {
-              projections: {
-                values: { ...(permissions === undefined ? {} : { permissions }) },
-              },
-            },
+  // Durable model-selection projection: `selectModel` writes `next`, exactly
+  // like the host's `model/selection` event; `inspect` falls back to the
+  // catalog default while `next` stays null.
+  const projection: { lastUsed: HostModelSelection | null; next: HostModelSelection | null } = {
+    lastUsed: null,
+    next: null,
+  }
+  const service: HostSessionController = {
+    async modelCatalog() {
+      if (state.failModels) throw new Error('models unavailable (fake)')
+      return {
+        default: { ...directory.current },
+        routableProviders: directory.groups.map(group => group.id),
+        groups: directory.groups,
+        failures: [],
+      }
+    },
+    async selectModel(request) {
+      if (state.failSelect) throw new Error('select failed (fake)')
+      const { sessionId, ...selection } = request
+      selected.push({
+        sessionId,
+        provider: selection.provider,
+        model: selection.model,
+        ...(selection.reasoningEffort === undefined ? {} : { reasoningEffort: selection.reasoningEffort }),
+      })
+      projection.next = { ...selection }
+      return { selected: { ...selection } }
+    },
+    async *follow(request) {
+      void request
+      yield {
+        type: 'snapshot',
+        projections: {
+          asOfSeq: 0,
+          values: {
+            modelSelection: { ...projection },
+            ...(permissions === undefined ? {} : { permissions }),
           },
-        }
-      },
+        },
+      }
     },
   }
-  return { api, selected, state, directory }
+  return { api: service, selected, state, directory }
 }
 
 /** An in-memory `sessionPersistence` listing the seeded headers. */
