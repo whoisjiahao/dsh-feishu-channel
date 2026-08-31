@@ -12,7 +12,7 @@
     "test": "vitest run",
     "typecheck": "tsc -b --pretty false && tsc -p tsconfig.vitest.json --pretty false",
     "gates": "node scripts/gates/run.mjs",
-    "prepare": "node scripts/prepare.mjs"
+    "prepublishOnly": "node scripts/prepare.mjs"
   },
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
