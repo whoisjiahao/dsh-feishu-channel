@@ -95,7 +95,7 @@ export async function executeCommand(
   context: CommandExecutionContext,
 ): Promise<CommandOutcome> {
   if (command.name === STOP_COMMAND) {
-    context.agent.cancel('user')
+    context.agent.cancel({ kind: 'user' })
     return success('⏹ 已停止当前任务。')
   }
   if (command.name === HELP_COMMAND) {

@@ -3,7 +3,7 @@
 <p align="center"><strong>把飞书变成 DSH 的遥控器</strong> —— 双向对话、流式富卡片、一键审批、扫码即用。</p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.8.0-1f6feb?style=flat" alt="version">
+  <img src="https://img.shields.io/badge/version-0.9.0-1f6feb?style=flat" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-3fb950?style=flat" alt="license">
   <img src="https://img.shields.io/badge/DSH-bundle%20plugin-6e40c9?style=flat" alt="DSH bundle plugin">
   <a href="https://github.com/whoisjiahao/dsh-feishu-channel/actions/workflows/gates.yml"><img src="https://github.com/whoisjiahao/dsh-feishu-channel/actions/workflows/gates.yml/badge.svg" alt="gates"></a>
@@ -29,16 +29,16 @@
 
 ## 快速开始
 
-> **环境要求**：DeepSeek Harness 的 `dsh web`（本插件在 **0.1.1-rc.2** 主线上开发并实测，依赖宿主 agents / settings / commands 等核心服务，标准 dsh web 组合自带）；Node `^22.19.0 || >=24`。
+> **环境要求**：DeepSeek Harness 的 `dsh web`（本插件在 **0.1.2-alpha.2** 主线上开发并实测，依赖宿主 agents / settings / commands / sessionController 等核心服务，标准 dsh web 组合自带）；Node `^22.19.0 || >=24`。
 
 **① 安装**（三选一，装进你的 web profile；命令即转发 pnpm，在 `~/.dsh/profiles/web` 内执行）：
 
 ```sh
 # 已发布版本（需要对应 tag 已推送到 GitHub）
-dsh plugin --profile web add github:whoisjiahao/dsh-feishu-channel#v0.8.0
+dsh plugin --profile web add github:whoisjiahao/dsh-feishu-channel#v0.9.0
 
 # 或：从 GitHub Releases 下载 tgz 后本地安装（无需网络解析 git 引用）
-dsh plugin --profile web add ~/Downloads/dsh-feishu-channel-0.8.0.tgz
+dsh plugin --profile web add ~/Downloads/dsh-feishu-channel-0.9.0.tgz
 
 # 或：开发模式——链接本仓库，pnpm build 后热重载即可见
 dsh plugin --profile web add file:/绝对路径/dsh-feishu-channel
@@ -84,9 +84,9 @@ test -f ~/.dsh/profiles/$PROFILE/package.json && echo profile-ok
 
 ```sh
 # A. 发布版（要求 GitHub 存在 v0.7.1 tag；未发布则用 B）
-dsh plugin --profile $PROFILE add github:whoisjiahao/dsh-feishu-channel#v0.8.0
+dsh plugin --profile $PROFILE add github:whoisjiahao/dsh-feishu-channel#v0.9.0
 # B. 本地 tgz（从 Releases 资产下载，或仓库内 pnpm pack 产出）
-dsh plugin --profile $PROFILE add /绝对路径/dsh-feishu-channel-0.8.0.tgz
+dsh plugin --profile $PROFILE add /绝对路径/dsh-feishu-channel-0.9.0.tgz
 ```
 
 完成标志：`~/.dsh/profiles/$PROFILE/package.json` 的 `dependencies` 出现 `"dsh-feishu-channel"`。

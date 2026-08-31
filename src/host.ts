@@ -4,7 +4,10 @@
  * packages) lets the package build self-contained; a composed DSH profile
  * supplies the real implementations at runtime. Field shapes mirror
  * @deepseek-ai/dsh-agent, @deepseek-ai/dsh-session and the approval seam as of
- * dsh 0.1.0-rc.8.
+ * dsh 0.1.2-alpha.2. The model/permission control surface is the in-process
+ * `sessionController` service (the 0.1.1-era `apiProxy` envelope shim was
+ * removed upstream); this contract calls its methods directly and surfaces
+ * failures as thrown errors.
  * @module dsh-feishu-channel/host
  */
 
@@ -58,7 +61,7 @@ export interface HostAgent {
   readonly id: string
   readonly session: HostSession
   followup(message: HostUserMessage): void
-  cancel(cause: string): void
+  cancel(cause: HostAgentCancelCause): void
 }
 
 /** An owned agent plus its teardown capability. */
@@ -71,7 +74,20 @@ export interface HostAgentHandle {
 export interface HostAgentOptions {
   readonly provider?: string | undefined
   readonly model?: string | undefined
+  /** Adapter-owned reasoning effort for the selected provider/model route. */
+  readonly reasoningEffort?: string | undefined
 }
+
+/**
+ * Why an active agent driver was cancelled. Structured, merge-extensible:
+ * the first cause wins for the aborted activity and lands on the turn/end
+ * `aborted` reason.
+ */
+export type HostAgentCancelCause =
+  | { readonly kind: 'user' }
+  | { readonly kind: 'parent' }
+  | { readonly kind: 'hook'; readonly reason: string }
+  | { readonly kind: 'disposed' }
 
 /** One persisted session's header, as lookup reads it. */
 export interface HostSessionHeader {
@@ -184,7 +200,7 @@ export interface HostModelProviderGroup {
   readonly models: readonly HostCatalogModel[]
 }
 
-/** Current selection plus the models the deployment advertises. */
+/** Current selection plus the models the deployment advertises; composed from catalog + projection. */
 export interface HostModelDirectory {
   readonly current: HostModelSelection
   readonly groups: readonly HostModelProviderGroup[]
@@ -209,38 +225,63 @@ export interface HostPermissionSelect {
   readonly currentValue: string
 }
 
-/** Host API envelope returned by the model-selection RPC surface. */
-export type HostApiResult<T> =
-  | { readonly ok: true; readonly value: T }
-  | { readonly ok: false; readonly error: { readonly code: string; readonly message: string } }
-
-interface HostApiRequest<T> {
-  readonly rpcId: string
-  readonly payload: T
+/** One provider whose model catalog lookup failed. */
+export interface HostModelCatalogFailure {
+  readonly id: string
+  readonly name: string
+  readonly message: string
 }
 
-interface HostApiResponse<T> {
-  readonly result: HostApiResult<T>
+/** Host-generation model catalog and the default used by unconfigured sessions. */
+export interface HostModelCatalog {
+  readonly default: HostModelSelection
+  /** Provider routes currently able to serve a request, including empty catalogs. */
+  readonly routableProviders: readonly string[]
+  readonly groups: readonly HostModelProviderGroup[]
+  readonly failures: readonly HostModelCatalogFailure[]
 }
 
-/** Narrow apiProxy surface used by interactive session controls. */
-export interface HostSessionApiProxy {
-  readonly sessions: {
-    models(request: HostApiRequest<{ readonly sessionId: string }>): Promise<HostApiResponse<HostModelDirectory>>
-    selectModel(
-      request: HostApiRequest<HostModelSelection & { readonly sessionId: string }>,
-    ): Promise<HostApiResponse<{ readonly selected: HostModelSelection }>>
-    history?(
-      request: HostApiRequest<{
-        readonly sessionId: string
-        readonly maxMessages?: number | undefined
-      }>,
-    ): Promise<HostApiResponse<{
-      readonly projections?: {
-        readonly values: { readonly permissions?: HostPermissionSelect | undefined }
-      } | undefined
-    }>>
-  }
+/** Durable model-selection intent and request-use projection for one session. */
+export interface HostModelSelectionProjection {
+  /** The selection that produced the session's latest request, when any. */
+  readonly lastUsed: HostModelSelection | null
+  /** A selection applied after the latest request but not yet served, when any. */
+  readonly next: HostModelSelection | null
+}
+
+/** Projection values this plugin reads from one session's follow baseline. */
+export interface HostSessionProjectionValues {
+  readonly permissions?: HostPermissionSelect | undefined
+  readonly modelSelection?: HostModelSelectionProjection | undefined
+}
+
+/** Complete projection values at an exact session event cursor. */
+export interface HostSessionProjectionBaseline {
+  readonly asOfSeq: number
+  readonly values: HostSessionProjectionValues
+}
+
+/** The opening frame of a session follow stream; later frames are event entries. */
+export interface HostSessionSnapshotFrame {
+  readonly type: 'snapshot'
+  readonly projections?: HostSessionProjectionBaseline | undefined
+}
+
+/** Any later follow frame; this plugin only consumes the opening snapshot. */
+export interface HostSessionEventFrame {
+  readonly type: string
+}
+
+/** Narrow `sessionController` surface used by interactive session controls. */
+export interface HostSessionController {
+  modelCatalog(): Promise<HostModelCatalog>
+  selectModel(
+    request: HostModelSelection & { readonly sessionId: string },
+  ): Promise<{ readonly selected: HostModelSelection }>
+  follow(
+    request: { readonly address: { readonly kind: 'session'; readonly sessionId: string } },
+    signal: AbortSignal,
+  ): AsyncIterable<HostSessionSnapshotFrame | HostSessionEventFrame>
 }
 
 /** The systemPrompt assembler, as per-agent composition uses it. */

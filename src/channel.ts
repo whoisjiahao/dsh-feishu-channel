@@ -48,8 +48,9 @@ import type {
   HostContentBlock,
   HostDefaultModel,
   HostLoader,
-  HostApiResult,
-  HostSessionApiProxy,
+  HostSessionController,
+  HostSessionProjectionValues,
+  HostSessionSnapshotFrame,
   HostModelController,
   HostModelSelection,
   HostPermissionSelect,
@@ -165,39 +166,64 @@ function detail(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-function valueOf<T>(result: HostApiResult<T>): T {
-  if (result.ok) return result.value
-  throw new Error(result.error.code + ': ' + result.error.message)
+/**
+ * Read one session's projection baseline from the follow stream's opening
+ * snapshot and close the stream. The web client consumes the same baseline
+ * through its live connection; a one-shot read keeps the channel's
+ * interactive cards free of stream lifecycle.
+ */
+async function readProjection(
+  controller: HostSessionController,
+  sessionId: string,
+): Promise<HostSessionProjectionValues> {
+  const lifetime = new AbortController()
+  const iterator = controller
+    .follow({ address: { kind: 'session', sessionId } }, lifetime.signal)
+    [Symbol.asyncIterator]()
+  try {
+    const first = await iterator.next()
+    if (first.done === true) throw new Error('当前会话没有可用的投影基线。')
+    const frame = first.value as HostSessionSnapshotFrame
+    if (frame.type !== 'snapshot' || frame.projections === undefined) {
+      throw new Error('当前会话没有可用的投影基线。')
+    }
+    return frame.projections.values
+  } finally {
+    lifetime.abort()
+    void iterator.return?.(undefined)
+  }
 }
 
-function createModelController(api: HostSessionApiProxy | undefined): HostModelController | undefined {
-  if (api === undefined) return undefined
+function createModelController(controller: HostSessionController | undefined): HostModelController | undefined {
+  if (controller === undefined) return undefined
   return {
     async inspect(sessionId) {
-      const response = await api.sessions.models({ rpcId: randomUUID(), payload: { sessionId } })
-      return valueOf(response.result)
+      const [catalog, values] = await Promise.all([
+        controller.modelCatalog(),
+        readProjection(controller, sessionId).catch(() => undefined),
+      ])
+      // Web parity: the pending selection wins, else the deployment default
+      // serves unconfigured sessions.
+      const current = values?.modelSelection?.next ?? catalog.default
+      return { current, groups: catalog.groups }
     },
     async select(sessionId, selection) {
-      const response = await api.sessions.selectModel({
-        rpcId: randomUUID(),
-        payload: { sessionId, ...selection },
+      const { selected } = await controller.selectModel({
+        sessionId,
+        ...selection,
       })
-      return valueOf(response.result).selected
+      return selected
     },
   }
 }
 
 async function inspectPermissions(
-  api: HostSessionApiProxy | undefined,
+  controller: HostSessionController | undefined,
   sessionId: string,
 ): Promise<HostPermissionSelect> {
-  const history = api?.sessions.history
-  if (history === undefined) throw new Error('当前部署没有会话权限投影服务。')
-  const response = await history({
-    rpcId: randomUUID(),
-    payload: { sessionId, maxMessages: 1 },
-  })
-  const permissions = valueOf(response.result).projections?.values.permissions
+  if (controller === undefined) throw new Error('当前部署没有会话权限投影服务。')
+  const values = await readProjection(controller, sessionId)
+  const permissions = values.permissions
   if (permissions === undefined) throw new Error('当前会话没有可用的权限预设。')
   return permissions
 }
@@ -237,7 +263,7 @@ function composeAgent(agentCtx: Context, config: ResolvedConfig): void {
   const addPrompt = (name: string, order: number, text: string): void => {
     prompt?.section({ name: 'feishu-channel:' + name, order, text })
   }
-  addPrompt('reply-card', 149, REPLY_CARD_PROMPT)
+  addPrompt('reply-card', -790, REPLY_CARD_PROMPT)
 
   const denied = new Set(config.denyTools)
   if (denied.size === 0) return
@@ -250,7 +276,7 @@ function composeAgent(agentCtx: Context, config: ResolvedConfig): void {
   })
   addPrompt(
     'interaction',
-    150,
+    -780,
     'This conversation happens in chat. Put questions and plan-approval requests in the reply; '
       + 'the next user message supplies the answer. Unavailable tools: ' + [...denied].join(', ') + '.',
   )
@@ -657,7 +683,7 @@ export function installChannel(
     cardMessageId?: string,
   ): Promise<void> => {
     const select = await inspectPermissions(
-      ctx.get('apiProxy') as HostSessionApiProxy | undefined,
+      ctx.get('sessionController') as HostSessionController | undefined,
       binding.owner.handle.agent.session.id,
     )
     const choices = permissionSettingChoices(select)
@@ -688,7 +714,7 @@ export function installChannel(
       return
     }
     if (command.name === MODEL_COMMAND || command.name === EFFORT_COMMAND) {
-      const controller = createModelController(ctx.get('apiProxy') as HostSessionApiProxy | undefined)
+      const controller = createModelController(ctx.get('sessionController') as HostSessionController | undefined)
       if (controller === undefined) throw new Error('当前部署没有会话模型控制服务。')
       const sent = await sendModelSetting(
         binding,
@@ -741,7 +767,7 @@ export function installChannel(
       await openCommandInteraction(binding, descriptor)
       return
     }
-    const controller = createModelController(ctx.get('apiProxy') as HostSessionApiProxy | undefined)
+    const controller = createModelController(ctx.get('sessionController') as HostSessionController | undefined)
     const outcome = await executeCommand(command, {
       agent: binding.owner.handle.agent,
       commands,
@@ -841,7 +867,7 @@ export function installChannel(
             agent: binding.owner.handle.agent,
             commands: ctx.get('commands') as HostCommands | undefined,
             signal: commandController.signal,
-            models: createModelController(ctx.get('apiProxy') as HostSessionApiProxy | undefined),
+            models: createModelController(ctx.get('sessionController') as HostSessionController | undefined),
           },
         )
       }
@@ -887,7 +913,7 @@ export function installChannel(
         agent: binding.owner.handle.agent,
         commands: ctx.get('commands') as HostCommands | undefined,
         signal: commandController.signal,
-        models: createModelController(ctx.get('apiProxy') as HostSessionApiProxy | undefined),
+        models: createModelController(ctx.get('sessionController') as HostSessionController | undefined),
       })
       if (outcome.status === 'failure') {
         await port.updateCard(target.cardMessageId, failedPermissionSettingCard(outcome.reply))
